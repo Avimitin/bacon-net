@@ -118,7 +118,8 @@ defmodule BaconNet.Modules.Iidx.Iidx30pc do
       end)
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("IIDX30pc", [
           E.e("pcdata",
             d_auto_adjust: profile["d_auto_adjust"],
@@ -270,7 +271,8 @@ defmodule BaconNet.Modules.Iidx.Iidx30pc do
             E.e("flg4", Map.get(profile, "secret_flg4", [-1, -1, -1]), __type: "s64")
           ]),
           E.e("join_shop", join_cflg: 1, join_id: 10, join_name: Config.arcade(), joinflg: 1),
-          E.e("leggendaria",
+          E.e(
+            "leggendaria",
             E.e("flg1", Map.get(profile, "leggendaria_flg1", [-1, -1, -1]), __type: "s64")
           ),
           E.e(
@@ -518,7 +520,8 @@ defmodule BaconNet.Modules.Iidx.Iidx30pc do
               chara_2: -1
             ),
             E.e("defeat", defeat_flg: 0),
-            E.e("total_defeat",
+            E.e(
+              "total_defeat",
               E.e("chara",
                 id: 0,
                 num: 0
@@ -606,7 +609,8 @@ defmodule BaconNet.Modules.Iidx.Iidx30pc do
     client_host = conn.remote_ip |> :inet.ntoa() |> to_string()
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e(
           "IIDX30pc",
           [
@@ -808,8 +812,15 @@ defmodule BaconNet.Modules.Iidx.Iidx30pc do
             end
 
           case XNode.child(lightning_setting, "concentration") do
-            nil -> gp
-            concentration -> Map.put(gp, "lightning_setting_concentration", String.to_integer(concentration.text))
+            nil ->
+              gp
+
+            concentration ->
+              Map.put(
+                gp,
+                "lightning_setting_concentration",
+                String.to_integer(concentration.text)
+              )
           end
       end
 
@@ -909,8 +920,11 @@ defmodule BaconNet.Modules.Iidx.Iidx30pc do
             )
 
           case XNode.child(step, "is_track_ticket") do
-            nil -> gp
-            is_track_ticket -> Map.put(gp, "stepup_is_track_ticket", String.to_integer(is_track_ticket.text))
+            nil ->
+              gp
+
+            is_track_ticket ->
+              Map.put(gp, "stepup_is_track_ticket", String.to_integer(is_track_ticket.text))
           end
       end
 
@@ -955,7 +969,11 @@ defmodule BaconNet.Modules.Iidx.Iidx30pc do
               ],
               game_profile,
               fn k, acc ->
-                Map.put(acc, "achievements_" <> k, XNode.attr(achievements, k) |> String.to_integer())
+                Map.put(
+                  acc,
+                  "achievements_" <> k,
+                  XNode.attr(achievements, k) |> String.to_integer()
+                )
               end
             )
 
@@ -996,7 +1014,11 @@ defmodule BaconNet.Modules.Iidx.Iidx30pc do
           game_profile
 
         language ->
-          Map.put(game_profile, "language_setting", XNode.attr(language, "language") |> String.to_integer())
+          Map.put(
+            game_profile,
+            "language_setting",
+            XNode.attr(language, "language") |> String.to_integer()
+          )
       end
 
     game_profile =
@@ -1032,7 +1054,8 @@ defmodule BaconNet.Modules.Iidx.Iidx30pc do
     {info, conn} = Core.process_request(conn)
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("IIDX30pc",
           aflg: 1,
           anum: 1,
@@ -1262,10 +1285,12 @@ defmodule BaconNet.Modules.Iidx.Iidx30pc do
     {info, conn} = Core.process_request(conn)
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e(
           "IIDX30pc",
-          for(i <- 0..5039,
+          for(
+            i <- 0..5039,
             do:
               E.e("ticket",
                 ticket_id: i,
@@ -1307,7 +1332,8 @@ defmodule BaconNet.Modules.Iidx.Iidx30pc do
     {info, conn} = Core.process_request(conn)
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e(
           "IIDX30pc",
           [

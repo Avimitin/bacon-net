@@ -44,7 +44,8 @@ defmodule BaconNet.Modules.Gitadora.Gameend do
       end)
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("#{ver}_gameend", [
           E.e("gamemode", mode: "game_mode"),
           E.e(
@@ -75,7 +76,12 @@ defmodule BaconNet.Modules.Gitadora.Gameend do
     game_profile = get_in(profile, ["version", to_string(game_version)]) || %{}
 
     game_profile =
-      put_game(game_profile, g, "customdata_playstyle", child_ints(player, ["customdata", "playstyle"]))
+      put_game(
+        game_profile,
+        g,
+        "customdata_playstyle",
+        child_ints(player, ["customdata", "playstyle"])
+      )
 
     game_profile =
       put_game(game_profile, g, "customdata_custom", child_ints(player, ["customdata", "custom"]))
@@ -123,15 +129,28 @@ defmodule BaconNet.Modules.Gitadora.Gameend do
       put_game(game_profile, g, "tutorial_progress", child_int(player, ["tutorial", "progress"]))
 
     game_profile =
-      put_game(game_profile, g, "tutorial_disp_state", child_int(player, ["tutorial", "disp_state"]))
-
-    game_profile = put_game(game_profile, g, "information", child_ints(player, ["information", "info"]))
-    game_profile = put_game(game_profile, g, "reward", child_ints(player, ["reward", "status"]))
-
-    game_profile = put_game(game_profile, g, "skilldata_skill", child_int(player, ["skilldata", "skill"]))
+      put_game(
+        game_profile,
+        g,
+        "tutorial_disp_state",
+        child_int(player, ["tutorial", "disp_state"])
+      )
 
     game_profile =
-      put_game(game_profile, g, "skilldata_allskill", child_int(player, ["skilldata", "all_skill"]))
+      put_game(game_profile, g, "information", child_ints(player, ["information", "info"]))
+
+    game_profile = put_game(game_profile, g, "reward", child_ints(player, ["reward", "status"]))
+
+    game_profile =
+      put_game(game_profile, g, "skilldata_skill", child_int(player, ["skilldata", "skill"]))
+
+    game_profile =
+      put_game(
+        game_profile,
+        g,
+        "skilldata_allskill",
+        child_int(player, ["skilldata", "all_skill"])
+      )
 
     groove = [
       "extra_gauge",
@@ -236,7 +255,9 @@ defmodule BaconNet.Modules.Gitadora.Gameend do
           "music_list_3"
         ],
         game_profile,
-        fn k, gp -> put_game(gp, g, "favorite_" <> k, child_ints(player, ["favoritemusic", k])) end
+        fn k, gp ->
+          put_game(gp, g, "favorite_" <> k, child_ints(player, ["favoritemusic", k]))
+        end
       )
 
     version_key = to_string(game_version)

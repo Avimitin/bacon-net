@@ -43,14 +43,14 @@ defmodule BaconNet.LZ77 do
       if (flag >>> bit &&& 1) == 1 do
         b = :binary.at(data, pos)
         window = :array.set(wcur, b, window)
-        decode_chunk(data, pos + 1, flag, bit + 1, window, (wcur + 1) &&& @window_mask, [b | out])
+        decode_chunk(data, pos + 1, flag, bit + 1, window, wcur + 1 &&& @window_mask, [b | out])
       else
         w = :binary.at(data, pos) <<< 8 ||| :binary.at(data, pos + 1)
 
         if w == 0 do
           {:halt, pos + 2, window, wcur, out}
         else
-          position = (wcur - (w >>> 4)) &&& @window_mask
+          position = wcur - (w >>> 4) &&& @window_mask
           length = (w &&& 0x0F) + @threshold
 
           {window, wcur, out} =
@@ -63,10 +63,11 @@ defmodule BaconNet.LZ77 do
   end
 
   defp copy_match(window, wcur, position, length, out) do
-    Enum.reduce(1..length//1, {window, wcur, position, out}, fn _, {window, wcur, position, out} ->
+    Enum.reduce(1..length//1, {window, wcur, position, out}, fn _,
+                                                                {window, wcur, position, out} ->
       b = :array.get(position &&& @window_mask, window)
       window = :array.set(wcur, b, window)
-      {window, (wcur + 1) &&& @window_mask, position + 1, [b | out]}
+      {window, wcur + 1 &&& @window_mask, position + 1, [b | out]}
     end)
     |> then(fn {window, wcur, _position, out} -> {window, wcur, out} end)
   end
@@ -75,6 +76,7 @@ defmodule BaconNet.LZ77 do
 
   def encode(data) when is_binary(data) do
     window = :array.new(@window_size, default: 0)
+
     do_encode(data, 0, window, 0, [])
     |> Enum.reverse()
     |> IO.iodata_to_binary()
@@ -112,7 +114,7 @@ defmodule BaconNet.LZ77 do
       case match_window(window, wcur, data, pos) do
         {mpos, length} when length >= @threshold ->
           byte1 = mpos >>> 4
-          byte2 = ((mpos &&& 0x0F) <<< 4) ||| ((length - @threshold) &&& 0x0F)
+          byte2 = (mpos &&& 0x0F) <<< 4 ||| (length - @threshold &&& 0x0F)
 
           {window, wcur, pos} =
             Enum.reduce(1..length//1, {window, wcur, pos}, fn _, {window, wcur, pos} ->
@@ -120,15 +122,32 @@ defmodule BaconNet.LZ77 do
               {:array.set(wcur &&& @window_mask, b, window), wcur + 1, pos + 1}
             end)
 
-          flag = (flag >>> 1) ||| 0
-          encode_group(data, pos, window, wcur &&& @window_mask, bit + 1, [byte2, byte1 | tokens], flag)
+          flag = flag >>> 1 ||| 0
+
+          encode_group(
+            data,
+            pos,
+            window,
+            wcur &&& @window_mask,
+            bit + 1,
+            [byte2, byte1 | tokens],
+            flag
+          )
 
         _ ->
           b = :binary.at(data, pos)
           window = :array.set(wcur, b, window)
-          flag = (flag >>> 1) ||| 1 <<< 7
+          flag = flag >>> 1 ||| 1 <<< 7
 
-          encode_group(data, pos + 1, window, (wcur + 1) &&& @window_mask, bit + 1, [b | tokens], flag)
+          encode_group(
+            data,
+            pos + 1,
+            window,
+            wcur + 1 &&& @window_mask,
+            bit + 1,
+            [b | tokens],
+            flag
+          )
       end
     end
   end
@@ -139,7 +158,7 @@ defmodule BaconNet.LZ77 do
 
   defp match_window(window, wcur, data, dpos) do
     Enum.reduce_while(@threshold..(@look_range - 1)//1, nil, fn i, best ->
-      length = match_current(window, (wcur - i) &&& @window_mask, i, data, dpos, 0)
+      length = match_current(window, wcur - i &&& @window_mask, i, data, dpos, 0)
 
       cond do
         length >= @inplace_threshold ->
@@ -156,7 +175,7 @@ defmodule BaconNet.LZ77 do
 
   defp match_current(window, pos, max_len, data, dpos, length) do
     if dpos + length < byte_size(data) and length < max_len and length < @max_len and
-         :array.get((pos + length) &&& @window_mask, window) == :binary.at(data, dpos + length) do
+         :array.get(pos + length &&& @window_mask, window) == :binary.at(data, dpos + length) do
       match_current(window, pos, max_len, data, dpos, length + 1)
     else
       length

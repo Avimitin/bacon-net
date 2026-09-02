@@ -46,7 +46,8 @@ defmodule BaconNet.Modules.Iidx.Iidx31lobby do
             end
 
           response =
-            E.e("response",
+            E.e(
+              "response",
               E.e("IIDX31lobby", [
                 E.e("host", is_arena_host, __type: "bool"),
                 E.e("matching_class", arena_class, __type: "s32"),
@@ -63,7 +64,8 @@ defmodule BaconNet.Modules.Iidx.Iidx31lobby do
           arena_host = %{"ga" => ga, "gp" => gp, "la" => la, "time" => now + 30}
 
           response =
-            E.e("response",
+            E.e(
+              "response",
               E.e("IIDX31lobby", [
                 E.e("host", 1, __type: "bool"),
                 E.e("matching_class", arena_class, __type: "s32"),
@@ -124,7 +126,8 @@ defmodule BaconNet.Modules.Iidx.Iidx31lobby do
             end
 
           response =
-            E.e("response",
+            E.e(
+              "response",
               E.e("IIDX31lobby", [
                 E.e("host", is_bpl_host, __type: "bool"),
                 E.e("matching_class", arena_class, __type: "s32"),
@@ -147,7 +150,8 @@ defmodule BaconNet.Modules.Iidx.Iidx31lobby do
             })
 
           response =
-            E.e("response",
+            E.e(
+              "response",
               E.e("IIDX31lobby", [
                 E.e("host", 1, __type: "bool"),
                 E.e("matching_class", arena_class, __type: "s32"),

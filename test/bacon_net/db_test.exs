@@ -66,7 +66,8 @@ defmodule BaconNet.DBTest do
   end
 
   test "init starts empty when the database file is missing" do
-    path = Path.join(System.tmp_dir!(), "bacon_db_missing_#{System.unique_integer([:positive])}.json")
+    path =
+      Path.join(System.tmp_dir!(), "bacon_db_missing_#{System.unique_integer([:positive])}.json")
 
     with_db_path(path, fn ->
       assert {:ok, %{}} = DB.init([])
@@ -74,7 +75,9 @@ defmodule BaconNet.DBTest do
   end
 
   test "init raises on malformed JSON" do
-    path = Path.join(System.tmp_dir!(), "bacon_db_corrupt_#{System.unique_integer([:positive])}.json")
+    path =
+      Path.join(System.tmp_dir!(), "bacon_db_corrupt_#{System.unique_integer([:positive])}.json")
+
     File.write!(path, "{not json")
 
     with_db_path(path, fn ->

@@ -141,7 +141,8 @@ defmodule BaconNet.Modules.Nostalgia.Op3Player do
     flags = List.duplicate(-1, 32)
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("regist_playdata", [
           E.e("permitted_list", [
             E.e("flag", flags, __type: "s32", sheet_type: "0"),
@@ -254,7 +255,8 @@ defmodule BaconNet.Modules.Nostalgia.Op3Player do
       end
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("get_musicdata", non_empty(music_nodes))
         # E.new_music_list(
         #    *[E.music(
@@ -278,7 +280,8 @@ defmodule BaconNet.Modules.Nostalgia.Op3Player do
     flags = List.duplicate(-1, 32)
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("get_playdata", [
           E.e("permitted_list", [
             E.e("flag", flags, __type: "s32", sheet_type: "0"),
@@ -416,23 +419,42 @@ defmodule BaconNet.Modules.Nostalgia.Op3Player do
     clear_flag = common |> XNode.child("clear_flag") |> text() |> int()
     slow_count = common |> XNode.child("slow_count") |> text() |> int()
     fast_count = common |> XNode.child("fast_count") |> text() |> int()
-    judge_count_miss = common |> XNode.child("judge_count") |> XNode.child("miss") |> text() |> int()
-    judge_count_good = common |> XNode.child("judge_count") |> XNode.child("good") |> text() |> int()
-    judge_count_just = common |> XNode.child("judge_count") |> XNode.child("just") |> text() |> int()
+
+    judge_count_miss =
+      common |> XNode.child("judge_count") |> XNode.child("miss") |> text() |> int()
+
+    judge_count_good =
+      common |> XNode.child("judge_count") |> XNode.child("good") |> text() |> int()
+
+    judge_count_just =
+      common |> XNode.child("judge_count") |> XNode.child("just") |> text() |> int()
 
     judge_count_super_just =
       common |> XNode.child("judge_count") |> XNode.child("super_just") |> text() |> int()
 
-    judge_count_near = common |> XNode.child("judge_count") |> XNode.child("near") |> text() |> int()
+    judge_count_near =
+      common |> XNode.child("judge_count") |> XNode.child("near") |> text() |> int()
 
     judge_percent_max_count_long_miss =
-      common |> XNode.child("judge_percent_max_count_long") |> XNode.child("miss") |> text() |> int()
+      common
+      |> XNode.child("judge_percent_max_count_long")
+      |> XNode.child("miss")
+      |> text()
+      |> int()
 
     judge_percent_max_count_long_good =
-      common |> XNode.child("judge_percent_max_count_long") |> XNode.child("good") |> text() |> int()
+      common
+      |> XNode.child("judge_percent_max_count_long")
+      |> XNode.child("good")
+      |> text()
+      |> int()
 
     judge_percent_max_count_long_just =
-      common |> XNode.child("judge_percent_max_count_long") |> XNode.child("just") |> text() |> int()
+      common
+      |> XNode.child("judge_percent_max_count_long")
+      |> XNode.child("just")
+      |> text()
+      |> int()
 
     judge_percent_max_count_long_super_just =
       common
@@ -442,16 +464,32 @@ defmodule BaconNet.Modules.Nostalgia.Op3Player do
       |> int()
 
     judge_percent_max_count_long_near =
-      common |> XNode.child("judge_percent_max_count_long") |> XNode.child("near") |> text() |> int()
+      common
+      |> XNode.child("judge_percent_max_count_long")
+      |> XNode.child("near")
+      |> text()
+      |> int()
 
     judge_percent_max_count_trill_miss =
-      common |> XNode.child("judge_percent_max_count_trill") |> XNode.child("miss") |> text() |> int()
+      common
+      |> XNode.child("judge_percent_max_count_trill")
+      |> XNode.child("miss")
+      |> text()
+      |> int()
 
     judge_percent_max_count_trill_good =
-      common |> XNode.child("judge_percent_max_count_trill") |> XNode.child("good") |> text() |> int()
+      common
+      |> XNode.child("judge_percent_max_count_trill")
+      |> XNode.child("good")
+      |> text()
+      |> int()
 
     judge_percent_max_count_trill_just =
-      common |> XNode.child("judge_percent_max_count_trill") |> XNode.child("just") |> text() |> int()
+      common
+      |> XNode.child("judge_percent_max_count_trill")
+      |> XNode.child("just")
+      |> text()
+      |> int()
 
     judge_percent_max_count_trill_super_just =
       common
@@ -461,9 +499,15 @@ defmodule BaconNet.Modules.Nostalgia.Op3Player do
       |> int()
 
     judge_percent_max_count_trill_near =
-      common |> XNode.child("judge_percent_max_count_trill") |> XNode.child("near") |> text() |> int()
+      common
+      |> XNode.child("judge_percent_max_count_trill")
+      |> XNode.child("near")
+      |> text()
+      |> int()
 
-    note_num_normal = common |> XNode.child("note_num") |> XNode.child("normal") |> text() |> int()
+    note_num_normal =
+      common |> XNode.child("note_num") |> XNode.child("normal") |> text() |> int()
+
     note_num_long = common |> XNode.child("note_num") |> XNode.child("long") |> text() |> int()
 
     note_num_glissando =
@@ -577,7 +621,11 @@ defmodule BaconNet.Modules.Nostalgia.Op3Player do
 
     game_profile =
       Enum.reduce(@travel_keys, game_profile, fn k, game_profile ->
-        Map.put(game_profile, k, root |> XNode.child("travel") |> XNode.child(k) |> text() |> int())
+        Map.put(
+          game_profile,
+          k,
+          root |> XNode.child("travel") |> XNode.child(k) |> text() |> int()
+        )
       end)
 
     extra_param = XNode.child(root, "extra_param")

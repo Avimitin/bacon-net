@@ -41,12 +41,12 @@ defmodule BaconNet.Modules.Iidx.Iidx33gamesystem do
 
     # E.option_2pp(),
     children =
-      (for mid <- unlock do
-         E.e("music_open", [
-           E.e("music_id", mid, __type: "s32"),
-           E.e("kind", 0, __type: "s32")
-         ])
-       end) ++
+      for mid <- unlock do
+        E.e("music_open", [
+          E.e("music_id", mid, __type: "s32"),
+          E.e("kind", 0, __type: "s32")
+        ])
+      end ++
         [
           grade_course(0, 15, [19022, 23068, 27013, 29045]),
           grade_course(0, 16, [27034, 24023, 16009, 25085]),
@@ -64,42 +64,42 @@ defmodule BaconNet.Modules.Iidx.Iidx33gamesystem do
             E.e("end", current_time + 600, __type: "u32")
           ])
         ] ++
-        (for {mid, index} <- Enum.with_index(unlock) do
-           E.e("arena_reward", [
-             E.e("index", index, __type: "s32"),
-             E.e("cube_num", (index + 1) * 50, __type: "s32"),
-             E.e("kind", 0, __type: "s32"),
-             E.e("value", mid, __type: "str")
-           ])
-         end) ++
-        (for sp_dp <- [0, 1], arena_class <- 0..19 do
-           E.e("arena_music_difficult", [
-             E.e("play_style", sp_dp, __type: "s32"),
-             E.e("arena_class", arena_class, __type: "s32"),
-             E.e("low_difficult", 8, __type: "s32"),
-             E.e("high_difficult", 12, __type: "s32"),
-             E.e("is_leggendaria", 1, __type: "bool"),
-             E.e("force_music_list_id", 0, __type: "s32")
-           ])
-         end) ++
-        (for sp_dp <- [0, 1], arena_class <- 0..19 do
-           E.e("arena_cpu_define", [
-             E.e("play_style", sp_dp, __type: "s32"),
-             E.e("arena_class", arena_class, __type: "s32"),
-             E.e("grade_id", 18, __type: "s32"),
-             E.e("low_music_difficult", 8, __type: "s32"),
-             E.e("high_music_difficult", 12, __type: "s32"),
-             E.e("is_leggendaria", 0, __type: "bool")
-           ])
-         end) ++
-        (for sp_dp <- [0, 1], arena_class <- 0..19 do
-           E.e("maching_class_range", [
-             E.e("play_style", sp_dp, __type: "s32"),
-             E.e("matching_class", arena_class, __type: "s32"),
-             E.e("low_arena_class", arena_class, __type: "s32"),
-             E.e("high_arena_class", arena_class, __type: "s32")
-           ])
-         end) ++
+        for {mid, index} <- Enum.with_index(unlock) do
+          E.e("arena_reward", [
+            E.e("index", index, __type: "s32"),
+            E.e("cube_num", (index + 1) * 50, __type: "s32"),
+            E.e("kind", 0, __type: "s32"),
+            E.e("value", mid, __type: "str")
+          ])
+        end ++
+        for sp_dp <- [0, 1], arena_class <- 0..19 do
+          E.e("arena_music_difficult", [
+            E.e("play_style", sp_dp, __type: "s32"),
+            E.e("arena_class", arena_class, __type: "s32"),
+            E.e("low_difficult", 8, __type: "s32"),
+            E.e("high_difficult", 12, __type: "s32"),
+            E.e("is_leggendaria", 1, __type: "bool"),
+            E.e("force_music_list_id", 0, __type: "s32")
+          ])
+        end ++
+        for sp_dp <- [0, 1], arena_class <- 0..19 do
+          E.e("arena_cpu_define", [
+            E.e("play_style", sp_dp, __type: "s32"),
+            E.e("arena_class", arena_class, __type: "s32"),
+            E.e("grade_id", 18, __type: "s32"),
+            E.e("low_music_difficult", 8, __type: "s32"),
+            E.e("high_music_difficult", 12, __type: "s32"),
+            E.e("is_leggendaria", 0, __type: "bool")
+          ])
+        end ++
+        for sp_dp <- [0, 1], arena_class <- 0..19 do
+          E.e("maching_class_range", [
+            E.e("play_style", sp_dp, __type: "s32"),
+            E.e("matching_class", arena_class, __type: "s32"),
+            E.e("low_arena_class", arena_class, __type: "s32"),
+            E.e("high_arena_class", arena_class, __type: "s32")
+          ])
+        end ++
         [
           E.e("Event1Phase", val: 0),
           E.e("isNewSongAnother12OpenFlg", val: 1),

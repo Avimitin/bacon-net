@@ -54,7 +54,9 @@ defmodule Mix.Tasks.Import.DdrAutomap do
     end
 
     for [mcode, difficulty, rank, lamp, score] <- scores do
-      IO.puts("mcode: #{mcode}, difficulty: #{difficulty}, rank: #{rank}, score: #{score}, lamp: #{lamp}")
+      IO.puts(
+        "mcode: #{mcode}, difficulty: #{difficulty}, rank: #{rank}, score: #{score}, lamp: #{lamp}"
+      )
 
       exscore = 0
 
@@ -117,7 +119,10 @@ defmodule Mix.Tasks.Import.DdrAutomap do
 
                   if c != nil and String.to_integer(c.text || "0") > 0 do
                     rank = chart |> XNode.child("rank") |> Map.get(:text) |> String.to_integer()
-                    clearkind = chart |> XNode.child("clearkind") |> Map.get(:text) |> String.to_integer()
+
+                    clearkind =
+                      chart |> XNode.child("clearkind") |> Map.get(:text) |> String.to_integer()
+
                     score = chart |> XNode.child("score") |> Map.get(:text) |> String.to_integer()
                     [[mcode, difficulty, rank, clearkind, score]]
                   else
@@ -136,8 +141,16 @@ defmodule Mix.Tasks.Import.DdrAutomap do
 
                 (XNode.children(music, "score_single") ++ XNode.children(music, "score_double"))
                 |> Enum.flat_map(fn x ->
-                  s = x |> XNode.child("score_str") |> Map.get(:text) |> String.split(",") |> Enum.map(&String.to_integer/1)
-                  difficulty = if x.tag == "score_double", do: Enum.at(s, 0) + 4, else: Enum.at(s, 0)
+                  s =
+                    x
+                    |> XNode.child("score_str")
+                    |> Map.get(:text)
+                    |> String.split(",")
+                    |> Enum.map(&String.to_integer/1)
+
+                  difficulty =
+                    if x.tag == "score_double", do: Enum.at(s, 0) + 4, else: Enum.at(s, 0)
+
                   rank = Enum.at(s, 2)
                   clearkind = Enum.at(s, 3)
                   score = Enum.at(s, 4)

@@ -17,8 +17,14 @@ defmodule Mix.Tasks.Mdb do
   def run(args) do
     {opts, _argv, _} =
       OptionParser.parse(args,
-        strict: [input: :string, output: :string, extract: :boolean, create: :boolean,
-                 merge: :boolean, diff: :boolean]
+        strict: [
+          input: :string,
+          output: :string,
+          extract: :boolean,
+          create: :boolean,
+          merge: :boolean,
+          diff: :boolean
+        ]
       )
 
     input = Keyword.get(opts, :input) || Mix.raise("--input is required")

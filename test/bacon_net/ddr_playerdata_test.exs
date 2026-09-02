@@ -33,7 +33,9 @@ defmodule BaconNet.DdrPlayerdataTest do
     conn =
       kbin_post(
         "/local2/#{@model}/playerdata/usergamedata_recv",
-        E.e("playerdata", [E.e("data", E.e("refid", "E004009999999999"))], method: "usergamedata_recv")
+        E.e("playerdata", [E.e("data", E.e("refid", "E004009999999999"))],
+          method: "usergamedata_recv"
+        )
       )
 
     assert conn.status == 200

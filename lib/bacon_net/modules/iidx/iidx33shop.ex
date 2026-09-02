@@ -26,7 +26,8 @@ defmodule BaconNet.Modules.Iidx.Iidx33shop do
     op = DB.get("shop", %{"pcbid" => pcbid}) || %{}
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("IIDX33shop",
           cls_opt: 0,
           opname: Map.get(op, "opname", Config.arcade()),
@@ -56,7 +57,8 @@ defmodule BaconNet.Modules.Iidx.Iidx33shop do
     {info, conn} = Core.process_request(conn)
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("IIDX33shop", E.e("valid", 1, __type: "bool"),
           music_0: -1,
           music_1: -1,

@@ -178,14 +178,17 @@ defmodule BaconNet.Modules.Sdvx.Game do
       end
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("game", [
-          E.e("event",
+          E.e(
+            "event",
             for s <- @events do
               E.e("info", E.e("event_id", s, __type: "str"))
             end
           ),
-          E.e("music_limited",
+          E.e(
+            "music_limited",
             for [mid, k] <- unlock do
               E.e("info", [
                 E.e("music_id", mid, __type: "s32"),
@@ -266,8 +269,10 @@ defmodule BaconNet.Modules.Sdvx.Game do
     DB.upsert("sdvx_profile", all_profiles_for_card, %{"card" => dataid})
 
     response =
-      E.e("response",
-        E.e("game",
+      E.e(
+        "response",
+        E.e(
+          "game",
           E.e("result", 0, __type: "u8")
         )
       )
@@ -341,7 +346,8 @@ defmodule BaconNet.Modules.Sdvx.Game do
             ]),
             E.e("kac_id", profile["name"], __type: "str"),
             E.e("block_no", 0, __type: "s32"),
-            E.e("volte_factory",
+            E.e(
+              "volte_factory",
               for s <- 1..998 do
                 E.e("info", [
                   E.e("goods_id", s, __type: "s32"),
@@ -358,7 +364,8 @@ defmodule BaconNet.Modules.Sdvx.Game do
             end ++
             [
               E.e("cloud", E.e("relation", 1, __type: "s8")),
-              E.e("something",
+              E.e(
+                "something",
                 for [ranking_id, value] <- [[1_402, 20_000]] do
                   E.e("info", [
                     E.e("ranking_id", ranking_id, __type: "s32"),
@@ -366,7 +373,8 @@ defmodule BaconNet.Modules.Sdvx.Game do
                   ])
                 end
               ),
-              E.e("festival",
+              E.e(
+                "festival",
                 [
                   E.e("fes_id", 1, __type: "s32"),
                   E.e("live_energy", 1_000_000, __type: "s32")
@@ -405,7 +413,8 @@ defmodule BaconNet.Modules.Sdvx.Game do
               E.e("sort_type", profile["sort_type"], __type: "u8"),
               E.e("narrow_down", profile["narrow_down"], __type: "u8"),
               E.e("headphone", profile["headphone"], __type: "u8"),
-              E.e("item",
+              E.e(
+                "item",
                 for [id, type, param] <- unlock do
                   E.e("info", [
                     E.e("id", id, __type: "u32"),
@@ -414,7 +423,8 @@ defmodule BaconNet.Modules.Sdvx.Game do
                   ])
                 end
               ),
-              E.e("param",
+              E.e(
+                "param",
                 for [type, id, param] <- customize do
                   E.e("info", [
                     E.e("type", type, __type: "s32"),
@@ -427,8 +437,10 @@ defmodule BaconNet.Modules.Sdvx.Game do
 
         E.e("response", E.e("game", game_children))
       else
-        E.e("response",
-          E.e("game",
+        E.e(
+          "response",
+          E.e(
+            "game",
             E.e("result", 1, __type: "u8")
           )
         )
@@ -485,14 +497,17 @@ defmodule BaconNet.Modules.Sdvx.Game do
 
     music_infos =
       for x <- best_scores do
-        E.e("info",
+        E.e(
+          "info",
           E.e("param", x, __type: "u32")
         )
       end
 
     response =
-      E.e("response",
-        E.e("game",
+      E.e(
+        "response",
+        E.e(
+          "game",
           E.e("music", non_empty(music_infos))
         )
       )
@@ -610,7 +625,8 @@ defmodule BaconNet.Modules.Sdvx.Game do
     DB.upsert("sdvx_profile", profile, %{"card" => dataid})
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("game")
       )
 
@@ -716,7 +732,8 @@ defmodule BaconNet.Modules.Sdvx.Game do
     })
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("game")
       )
 
@@ -753,8 +770,10 @@ defmodule BaconNet.Modules.Sdvx.Game do
       end
 
     response =
-      E.e("response",
-        E.e("game",
+      E.e(
+        "response",
+        E.e(
+          "game",
           E.e("sc", non_empty(ds))
         )
       )
@@ -766,7 +785,8 @@ defmodule BaconNet.Modules.Sdvx.Game do
     {info, conn} = Core.process_request(conn)
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("game", E.e("interval", 30, __type: "u32"))
       )
 
@@ -777,7 +797,8 @@ defmodule BaconNet.Modules.Sdvx.Game do
     {info, conn} = Core.process_request(conn)
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("game", E.e("nxt_time", 1000 * 5 * 60, __type: "u32"))
       )
 
@@ -788,7 +809,8 @@ defmodule BaconNet.Modules.Sdvx.Game do
     {info, conn} = Core.process_request(conn)
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("game")
       )
 
@@ -799,7 +821,8 @@ defmodule BaconNet.Modules.Sdvx.Game do
     {info, conn} = Core.process_request(conn)
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("game")
       )
 
@@ -810,7 +833,8 @@ defmodule BaconNet.Modules.Sdvx.Game do
     {info, conn} = Core.process_request(conn)
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("game")
       )
 
@@ -821,7 +845,8 @@ defmodule BaconNet.Modules.Sdvx.Game do
     {info, conn} = Core.process_request(conn)
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("game")
       )
 
@@ -832,7 +857,8 @@ defmodule BaconNet.Modules.Sdvx.Game do
     {info, conn} = Core.process_request(conn)
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("game")
       )
 
@@ -843,7 +869,8 @@ defmodule BaconNet.Modules.Sdvx.Game do
     {info, conn} = Core.process_request(conn)
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("game")
       )
 
@@ -854,7 +881,8 @@ defmodule BaconNet.Modules.Sdvx.Game do
     {info, conn} = Core.process_request(conn)
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("game")
       )
 
@@ -865,7 +893,8 @@ defmodule BaconNet.Modules.Sdvx.Game do
     {info, conn} = Core.process_request(conn)
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("game")
       )
 
@@ -876,7 +905,8 @@ defmodule BaconNet.Modules.Sdvx.Game do
     {info, conn} = Core.process_request(conn)
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("game")
       )
 

@@ -15,7 +15,8 @@ defmodule BaconNet.Modules.Core.Pcbtracker do
     {info, conn} = Core.process_request(conn)
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("pcbtracker",
           status: 0,
           expire: 1200,

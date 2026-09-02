@@ -87,7 +87,8 @@ defmodule BaconNet.Modules.Gitadora.Playablemusic do
       end)
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("#{ver}_playablemusic", [
           E.e("hot", [
             E.e("major", -1, __type: "s32"),
@@ -126,7 +127,8 @@ defmodule BaconNet.Modules.Gitadora.Playablemusic do
     root.children
     |> Enum.filter(&(&1.tag == "mdb_data"))
     |> Enum.reduce(songs, fn entry, acc ->
-      lvl = entry |> XNode.child("xg_diff_list") |> Map.get(:text) |> String.split(" ", trim: true)
+      lvl =
+        entry |> XNode.child("xg_diff_list") |> Map.get(:text) |> String.split(" ", trim: true)
 
       d_ver =
         if short_ver in ["fz", "hv", "nt", "ex"] do

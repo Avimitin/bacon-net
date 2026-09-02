@@ -30,7 +30,8 @@ defmodule BaconNet.Modules.Core.Eacoin do
     State.update(:eacoin_payments, %{}, &{&1, Map.put(&1, sessid, cardid)})
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("eacoin", [
           E.e("sequence", 1, __type: "s16"),
           E.e("acstatus", 1, __type: "u8"),
@@ -91,7 +92,8 @@ defmodule BaconNet.Modules.Core.Eacoin do
         )
 
         response =
-          E.e("response",
+          E.e(
+            "response",
             E.e("eacoin", [
               E.e("acstatus", 0, __type: "u8"),
               E.e("autocharge", 0, __type: "u8"),
@@ -115,7 +117,8 @@ defmodule BaconNet.Modules.Core.Eacoin do
         end
 
       response =
-        E.e("response",
+        E.e(
+          "response",
           E.e("eacoin", [
             E.e("acstatus", 0, __type: "u8"),
             E.e("balance", balance, __type: "s32")

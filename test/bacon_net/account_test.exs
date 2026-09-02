@@ -56,11 +56,14 @@ defmodule BaconNet.AccountTest do
   test "login, me, logout" do
     %{"token" => token} = json(register())
 
-    conn = call(:post, "/account/api/login", %{"username" => "Player1", "password" => "password123"})
+    conn =
+      call(:post, "/account/api/login", %{"username" => "Player1", "password" => "password123"})
+
     assert conn.status == 200
     assert %{"token" => _} = json(conn)
 
-    assert call(:post, "/account/api/login", %{"username" => "player1", "password" => "wrong"}).status == 401
+    assert call(:post, "/account/api/login", %{"username" => "player1", "password" => "wrong"}).status ==
+             401
 
     conn = call(:get, "/account/api/me", nil, token)
     assert %{"username" => "player1", "cards" => []} = json(conn)
@@ -93,8 +96,13 @@ defmodule BaconNet.AccountTest do
     assert register("limitpw", String.duplicate("a", 1024)).status == 201
 
     # login with an oversized password is rejected without hashing
-    assert call(:post, "/account/api/login", %{"username" => "limitpw", "password" => big}).status == 401
-    assert call(:post, "/account/api/login", %{"username" => "limitpw", "password" => String.duplicate("a", 1024)}).status == 200
+    assert call(:post, "/account/api/login", %{"username" => "limitpw", "password" => big}).status ==
+             401
+
+    assert call(:post, "/account/api/login", %{
+             "username" => "limitpw",
+             "password" => String.duplicate("a", 1024)
+           }).status == 200
   end
 
   test "card binding with normalization and uniqueness" do
@@ -138,8 +146,19 @@ defmodule BaconNet.AccountTest do
       "version" => %{"33" => %{"djname" => "ＳＴＲＡＮＧＥＲ"}}
     })
 
-    DB.insert("iidx_scores", %{"iidx_id" => 12_345_678, "music_id" => 1000, "chart_id" => 2, "ex_score" => 1500})
-    DB.insert("iidx_scores", %{"iidx_id" => 99_999_999, "music_id" => 1000, "chart_id" => 2, "ex_score" => 2000})
+    DB.insert("iidx_scores", %{
+      "iidx_id" => 12_345_678,
+      "music_id" => 1000,
+      "chart_id" => 2,
+      "ex_score" => 1500
+    })
+
+    DB.insert("iidx_scores", %{
+      "iidx_id" => 99_999_999,
+      "music_id" => 1000,
+      "chart_id" => 2,
+      "ex_score" => 2000
+    })
 
     # alice sees only her own profile
     conn = call(:get, "/account/api/profiles", nil, t1)
@@ -157,7 +176,9 @@ defmodule BaconNet.AccountTest do
     assert conn.status == 200
 
     conn =
-      call(:patch, "/account/api/profiles/iidx_profile/#{profile_id}",
+      call(
+        :patch,
+        "/account/api/profiles/iidx_profile/#{profile_id}",
         %{"pin" => "9999", "card" => "E004000000000000"},
         t1
       )
@@ -169,7 +190,9 @@ defmodule BaconNet.AccountTest do
 
     # bob cannot touch alice's profile
     assert call(:get, "/account/api/profiles/iidx_profile/#{profile_id}", nil, t2).status == 404
-    assert call(:patch, "/account/api/profiles/iidx_profile/#{profile_id}", %{"pin" => "0"}, t2).status == 404
+
+    assert call(:patch, "/account/api/profiles/iidx_profile/#{profile_id}", %{"pin" => "0"}, t2).status ==
+             404
 
     # unknown table is rejected even for the owner
     assert call(:get, "/account/api/profiles/webui_users/1", nil, t1).status == 404
@@ -200,17 +223,39 @@ defmodule BaconNet.AccountTest do
       "version" => %{"33" => %{"djname" => "ＳＥＣＯＮＤ"}}
     })
 
-    DB.insert("iidx_scores_best", %{"iidx_id" => 111, "music_id" => 1000, "chart_id" => 2, "ex_score" => 1800})
-    DB.insert("iidx_scores_best", %{"iidx_id" => 222, "music_id" => 1000, "chart_id" => 2, "ex_score" => 1900})
-    DB.insert("iidx_scores_best", %{"iidx_id" => 111, "music_id" => 1001, "chart_id" => 2, "ex_score" => 700})
+    DB.insert("iidx_scores_best", %{
+      "iidx_id" => 111,
+      "music_id" => 1000,
+      "chart_id" => 2,
+      "ex_score" => 1800
+    })
+
+    DB.insert("iidx_scores_best", %{
+      "iidx_id" => 222,
+      "music_id" => 1000,
+      "chart_id" => 2,
+      "ex_score" => 1900
+    })
+
+    DB.insert("iidx_scores_best", %{
+      "iidx_id" => 111,
+      "music_id" => 1001,
+      "chart_id" => 2,
+      "ex_score" => 700
+    })
 
     conn = call(:get, "/account/api/rankings", nil, token)
     %{"games" => [g]} = json(conn)
     assert g["game"] == "iidx"
 
     [first, second, other_song] = g["entries"]
-    assert {first["song"], first["rank"], first["score"], first["name"]} == {1000, 1, 1900, "ＳＥＣＯＮＤ"}
-    assert {second["song"], second["rank"], second["score"], second["name"]} == {1000, 2, 1800, "ＴＯＰ"}
+
+    assert {first["song"], first["rank"], first["score"], first["name"]} ==
+             {1000, 1, 1900, "ＳＥＣＯＮＤ"}
+
+    assert {second["song"], second["rank"], second["score"], second["name"]} ==
+             {1000, 2, 1800, "ＴＯＰ"}
+
     assert {other_song["song"], other_song["rank"]} == {1001, 1}
   after
     DB.drop_table("iidx_profile")
@@ -233,7 +278,9 @@ defmodule BaconNet.AccountTest do
     DB.update("webui_users", %{"banned" => true}, %{"username" => "banned1"})
 
     # login is rejected with 403 account_banned
-    conn = call(:post, "/account/api/login", %{"username" => "banned1", "password" => "password123"})
+    conn =
+      call(:post, "/account/api/login", %{"username" => "banned1", "password" => "password123"})
+
     assert conn.status == 403
     assert %{"error" => "account_banned"} = json(conn)
 
@@ -242,7 +289,11 @@ defmodule BaconNet.AccountTest do
 
     # unban restores login
     DB.update("webui_users", %{"banned" => false}, %{"username" => "banned1"})
-    assert call(:post, "/account/api/login", %{"username" => "banned1", "password" => "password123"}).status == 200
+
+    assert call(:post, "/account/api/login", %{
+             "username" => "banned1",
+             "password" => "password123"
+           }).status == 200
   end
 
   test "games metadata is public" do

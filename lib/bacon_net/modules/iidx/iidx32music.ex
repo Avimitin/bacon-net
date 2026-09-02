@@ -181,7 +181,11 @@ defmodule BaconNet.Modules.Iidx.Iidx32music do
         idx = stat["chart_id"] + dp_idx
 
         crate =
-          Map.put(crate, music_id, List.replace_at(crate[music_id], idx, trunc(stat["clear_rate"])))
+          Map.put(
+            crate,
+            music_id,
+            List.replace_at(crate[music_id], idx, trunc(stat["clear_rate"]))
+          )
 
         fcrate =
           Map.put(

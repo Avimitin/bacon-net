@@ -20,7 +20,8 @@ defmodule BaconNet.Modules.Core.Facility do
     client_host = conn.remote_ip |> :inet.ntoa() |> to_string()
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e(
           "facility",
           [

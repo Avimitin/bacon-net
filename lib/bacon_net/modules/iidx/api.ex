@@ -441,7 +441,8 @@ defmodule BaconNet.Modules.Iidx.Api do
     <<font_idx::little-32, game_version::little-16, bin::binary>> = bin
 
     {other_folder, bemani_folder, beginner_rec_folder, iidx_rec_folder, bemani_rec_folder,
-     splittable_diff, unk_unused, bin} =
+     splittable_diff, unk_unused,
+     bin} =
       if wide do
         <<other::little-16, bemani::little-16, beginner_rec::little-16, iidx_rec::little-16,
           bemani_rec::little-16, splittable::little-16, unk::little-16, r::binary>> = bin
@@ -453,7 +454,8 @@ defmodule BaconNet.Modules.Iidx.Api do
       end
 
     {spb_level, spn_level, sph_level, spa_level, spl_level, dpb_level, dpn_level, dph_level,
-     dpa_level, dpl_level, bin} =
+     dpa_level, dpl_level,
+     bin} =
       if version >= 27 do
         <<spb, spn, sph, spa, spl, dpb, dpn, dph, dpa, dpl, r::binary>> = bin
         {spb, spn, sph, spa, spl, dpb, dpn, dph, dpa, dpl, r}
@@ -474,7 +476,8 @@ defmodule BaconNet.Modules.Iidx.Api do
     <<song_id::little-32, volume::little-32, bin::binary>> = bin
 
     {spb_ident, spn_ident, sph_ident, spa_ident, spl_ident, dpb_ident, dpn_ident, dph_ident,
-     dpa_ident, dpl_ident, bin} =
+     dpa_ident, dpl_ident,
+     bin} =
       if version >= 27 do
         <<spb, spn, sph, spa, spl, dpb, dpn, dph, dpa, dpl, r::binary>> = bin
         {spb, spn, sph, spa, spl, dpb, dpn, dph, dpa, dpl, r}

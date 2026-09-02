@@ -30,8 +30,20 @@ defmodule BaconNet.Modules.Account do
       "profile_table" => "iidx_profile",
       "id_field" => "iidx_id",
       "score_tables" => [
-        %{"table" => "iidx_scores", "kind" => "history", "song_field" => "music_id", "chart_field" => "chart_id", "score_field" => "ex_score"},
-        %{"table" => "iidx_scores_best", "kind" => "best", "song_field" => "music_id", "chart_field" => "chart_id", "score_field" => "ex_score"}
+        %{
+          "table" => "iidx_scores",
+          "kind" => "history",
+          "song_field" => "music_id",
+          "chart_field" => "chart_id",
+          "score_field" => "ex_score"
+        },
+        %{
+          "table" => "iidx_scores_best",
+          "kind" => "best",
+          "song_field" => "music_id",
+          "chart_field" => "chart_id",
+          "score_field" => "ex_score"
+        }
       ]
     },
     %{
@@ -40,8 +52,20 @@ defmodule BaconNet.Modules.Account do
       "profile_table" => "ddr_profile",
       "id_field" => "ddr_id",
       "score_tables" => [
-        %{"table" => "ddr_scores", "kind" => "history", "song_field" => "mcode", "chart_field" => "difficulty", "score_field" => "score"},
-        %{"table" => "ddr_scores_best", "kind" => "best", "song_field" => "mcode", "chart_field" => "difficulty", "score_field" => "score"}
+        %{
+          "table" => "ddr_scores",
+          "kind" => "history",
+          "song_field" => "mcode",
+          "chart_field" => "difficulty",
+          "score_field" => "score"
+        },
+        %{
+          "table" => "ddr_scores_best",
+          "kind" => "best",
+          "song_field" => "mcode",
+          "chart_field" => "difficulty",
+          "score_field" => "score"
+        }
       ]
     },
     %{
@@ -50,8 +74,20 @@ defmodule BaconNet.Modules.Account do
       "profile_table" => "sdvx_profile",
       "id_field" => "sdvx_id",
       "score_tables" => [
-        %{"table" => "sdvx_scores", "kind" => "history", "song_field" => "music_id", "chart_field" => "music_type", "score_field" => "score"},
-        %{"table" => "sdvx_scores_best", "kind" => "best", "song_field" => "music_id", "chart_field" => "music_type", "score_field" => "score"}
+        %{
+          "table" => "sdvx_scores",
+          "kind" => "history",
+          "song_field" => "music_id",
+          "chart_field" => "music_type",
+          "score_field" => "score"
+        },
+        %{
+          "table" => "sdvx_scores_best",
+          "kind" => "best",
+          "song_field" => "music_id",
+          "chart_field" => "music_type",
+          "score_field" => "score"
+        }
       ]
     },
     %{
@@ -60,10 +96,34 @@ defmodule BaconNet.Modules.Account do
       "profile_table" => "gitadora_profile",
       "id_field" => "gitadora_id",
       "score_tables" => [
-        %{"table" => "drummania_scores", "kind" => "history", "song_field" => "musicid", "chart_field" => "seq", "score_field" => "perc"},
-        %{"table" => "drummania_scores_best", "kind" => "best", "song_field" => "musicid", "chart_field" => "seq", "score_field" => "perc"},
-        %{"table" => "guitarfreaks_scores", "kind" => "history", "song_field" => "musicid", "chart_field" => "seq", "score_field" => "perc"},
-        %{"table" => "guitarfreaks_scores_best", "kind" => "best", "song_field" => "musicid", "chart_field" => "seq", "score_field" => "perc"}
+        %{
+          "table" => "drummania_scores",
+          "kind" => "history",
+          "song_field" => "musicid",
+          "chart_field" => "seq",
+          "score_field" => "perc"
+        },
+        %{
+          "table" => "drummania_scores_best",
+          "kind" => "best",
+          "song_field" => "musicid",
+          "chart_field" => "seq",
+          "score_field" => "perc"
+        },
+        %{
+          "table" => "guitarfreaks_scores",
+          "kind" => "history",
+          "song_field" => "musicid",
+          "chart_field" => "seq",
+          "score_field" => "perc"
+        },
+        %{
+          "table" => "guitarfreaks_scores_best",
+          "kind" => "best",
+          "song_field" => "musicid",
+          "chart_field" => "seq",
+          "score_field" => "perc"
+        }
       ]
     },
     %{
@@ -72,8 +132,20 @@ defmodule BaconNet.Modules.Account do
       "profile_table" => "dancerush_profile",
       "id_field" => "drs_id",
       "score_tables" => [
-        %{"table" => "drs_scores", "kind" => "history", "song_field" => "music_id", "chart_field" => "music_type", "score_field" => "score"},
-        %{"table" => "drs_scores_best", "kind" => "best", "song_field" => "music_id", "chart_field" => "music_type", "score_field" => "score"}
+        %{
+          "table" => "drs_scores",
+          "kind" => "history",
+          "song_field" => "music_id",
+          "chart_field" => "music_type",
+          "score_field" => "score"
+        },
+        %{
+          "table" => "drs_scores_best",
+          "kind" => "best",
+          "song_field" => "music_id",
+          "chart_field" => "music_type",
+          "score_field" => "score"
+        }
       ]
     },
     %{
@@ -82,8 +154,20 @@ defmodule BaconNet.Modules.Account do
       "profile_table" => "nostalgia_profile",
       "id_field" => "nostalgia_id",
       "score_tables" => [
-        %{"table" => "nostalgia_scores", "kind" => "history", "song_field" => "music_index", "chart_field" => "sheet_type", "score_field" => "score"},
-        %{"table" => "nostalgia_scores_best", "kind" => "best", "song_field" => "music_index", "chart_field" => "sheet_type", "score_field" => "score"}
+        %{
+          "table" => "nostalgia_scores",
+          "kind" => "history",
+          "song_field" => "music_index",
+          "chart_field" => "sheet_type",
+          "score_field" => "score"
+        },
+        %{
+          "table" => "nostalgia_scores_best",
+          "kind" => "best",
+          "song_field" => "music_index",
+          "chart_field" => "sheet_type",
+          "score_field" => "score"
+        }
       ]
     }
   ]
@@ -149,7 +233,8 @@ defmodule BaconNet.Modules.Account do
          username when is_binary(username) <- body["username"],
          password when is_binary(password) and byte_size(password) <= @max_password_bytes <-
            body["password"],
-         user when not is_nil(user) <- DB.get(@users_table, %{"username" => String.downcase(username)}),
+         user when not is_nil(user) <-
+           DB.get(@users_table, %{"username" => String.downcase(username)}),
          true <- verify_password(user, password) do
       if user["banned"] == true do
         Api.error(conn, 403, "account_banned")
@@ -433,7 +518,11 @@ defmodule BaconNet.Modules.Account do
   end
 
   defp public_user(user) do
-    %{"username" => user["username"], "cards" => user["cards"] || [], "created_at" => user["created_at"]}
+    %{
+      "username" => user["username"],
+      "cards" => user["cards"] || [],
+      "created_at" => user["created_at"]
+    }
   end
 
   defp body_object(conn) do

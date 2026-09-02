@@ -164,7 +164,8 @@ defmodule BaconNet.Modules.Ddr.Playdata3 do
 
     response =
       if mdb != %{} do
-        E.e("response",
+        E.e(
+          "response",
           E.e(
             "playdata_3",
             [
@@ -174,7 +175,8 @@ defmodule BaconNet.Modules.Ddr.Playdata3 do
           )
         )
       else
-        E.e("response",
+        E.e(
+          "response",
           E.e("playdata_3", [
             E.e("result", 0, __type: "s32"),
             E.e("servertime", :os.system_time(:millisecond), __type: "u64"),
@@ -234,7 +236,10 @@ defmodule BaconNet.Modules.Ddr.Playdata3 do
 
     settings_nodes =
       for {k, fields} <- @load_settings, k != "common" do
-        E.e(k, for({v, type} <- fields, do: E.e(v, Map.get(profile, "#{k}_#{v}", 0), __type: type)))
+        E.e(
+          k,
+          for({v, type} <- fields, do: E.e(v, Map.get(profile, "#{k}_#{v}", 0), __type: type))
+        )
       end
 
     rival_nodes =
@@ -250,11 +255,13 @@ defmodule BaconNet.Modules.Ddr.Playdata3 do
         diffs = Map.fetch!(scores_map, mcode)
 
         singles =
-          for {difficulty, s} <- diffs, difficulty < 5,
+          for {difficulty, s} <- diffs,
+              difficulty < 5,
               do: E.e("score_single", E.e("score_str", s, __type: "str"))
 
         doubles =
-          for {difficulty, s} <- diffs, difficulty > 4,
+          for {difficulty, s} <- diffs,
+              difficulty > 4,
               do: E.e("score_double", E.e("score_str", s, __type: "str"))
 
         E.e("score", [E.e("mcode", mcode, __type: "s32")] ++ singles ++ doubles)
@@ -278,7 +285,8 @@ defmodule BaconNet.Modules.Ddr.Playdata3 do
       end
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e(
           "playdata_3",
           [
@@ -356,7 +364,8 @@ defmodule BaconNet.Modules.Ddr.Playdata3 do
       end
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e(
           "playdata_3",
           [E.e("result", 0, __type: "s32")] ++
@@ -398,12 +407,14 @@ defmodule BaconNet.Modules.Ddr.Playdata3 do
       |> Map.put("rival_3_ddr_id", 0)
       |> Map.put("customize", @customize_settings)
 
-    all_profiles_for_card = put_in(all_profiles_for_card, ["version", to_string(game_version)], tmp)
+    all_profiles_for_card =
+      put_in(all_profiles_for_card, ["version", to_string(game_version)], tmp)
 
     DB.upsert("ddr_profile", all_profiles_for_card, %{"card" => refid})
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("playdata_3", [
           E.e("result", 0, __type: "s32"),
           E.e("refid", refid, __type: "str"),
@@ -580,7 +591,8 @@ defmodule BaconNet.Modules.Ddr.Playdata3 do
     record = get_doc_by_id("ddr_scores", ghostid)
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("playdata_3", [
           E.e("result", 0, __type: "s32"),
           E.e("ghostsize", Map.fetch!(record, "ghostsize"), __type: "s32"),
@@ -595,7 +607,8 @@ defmodule BaconNet.Modules.Ddr.Playdata3 do
     {info, conn} = Core.process_request(conn)
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("playdata_3", [
           E.e("result", 0, __type: "s32"),
           E.e("league_class", 0, __type: "s32"),

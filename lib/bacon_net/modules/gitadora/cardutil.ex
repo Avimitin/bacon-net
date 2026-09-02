@@ -44,7 +44,8 @@ defmodule BaconNet.Modules.Gitadora.Cardutil do
       end
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e(
           "#{ver}_cardutil",
           E.e(
@@ -84,7 +85,7 @@ defmodule BaconNet.Modules.Gitadora.Cardutil do
 
     all_profiles_for_card =
       if not Map.has_key?(all_profiles_for_card, "gitadora_id") do
-        gitadora_id = 10000000 + :rand.uniform(90000000) - 1
+        gitadora_id = 10_000_000 + :rand.uniform(90_000_000) - 1
         Map.put(all_profiles_for_card, "gitadora_id", gitadora_id)
       else
         all_profiles_for_card
@@ -101,8 +102,56 @@ defmodule BaconNet.Modules.Gitadora.Cardutil do
 
     game_data = %{
       "customdata_playstyle" => [
-        0, 1, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0,
-        0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 20, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 20, 0
+        0,
+        1,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        20,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        0,
+        20,
+        0
       ],
       "customdata_custom" => List.duplicate(0, 50),
       "playinfo_cabid" => 1,
@@ -220,7 +269,8 @@ defmodule BaconNet.Modules.Gitadora.Cardutil do
     DB.upsert("gitadora_profile", all_profiles_for_card, %{"card" => dataid})
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e(
           "#{ver}_cardutil",
           E.e(

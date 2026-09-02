@@ -163,7 +163,8 @@ defmodule BaconNet.Modules.Drs.Game do
       end
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("game", [
           E.e("mdb", non_empty(music_nodes)),
           E.e(
@@ -183,7 +184,8 @@ defmodule BaconNet.Modules.Drs.Game do
                 E.e("end_date", 1_693_422_123_358, __type: "u64"),
                 E.e("title", "", __type: "str"),
                 E.e("regulation", i, __type: "s32"),
-                E.e("target_music",
+                E.e(
+                  "target_music",
                   E.e("music", [
                     E.e("music_id", 1, __type: "s32"),
                     E.e("music_type", "1b", __type: "str")
@@ -239,7 +241,8 @@ defmodule BaconNet.Modules.Drs.Game do
             ])
           end
 
-        E.e("response",
+        E.e(
+          "response",
           E.e("game", [
             E.e("result", 0, __type: "s32"),
             E.e("userid", E.e("code", djid, __type: "s32")),
@@ -265,8 +268,10 @@ defmodule BaconNet.Modules.Drs.Game do
           ])
         )
       else
-        E.e("response",
-          E.e("game",
+        E.e(
+          "response",
+          E.e(
+            "game",
             E.e("result", 1, __type: "s32")
           )
         )
@@ -354,8 +359,10 @@ defmodule BaconNet.Modules.Drs.Game do
       end
 
     response =
-      E.e("response",
-        E.e("game",
+      E.e(
+        "response",
+        E.e(
+          "game",
           E.e("scoredata", non_empty(music_nodes))
         )
       )

@@ -87,7 +87,8 @@ defmodule BaconNet.Card do
   end
 
   @doc "Convert a 16-char Konami ID back to the 16-hex-char card UID."
-  def to_uid(konami_id) when byte_size(konami_id) == 16 do    card_type =
+  def to_uid(konami_id) when byte_size(konami_id) == 16 do
+    card_type =
       case String.at(konami_id, 14) do
         "1" -> 1
         "2" -> 2
@@ -154,7 +155,11 @@ defmodule BaconNet.Card do
       |> String.replace("V", "U")
 
     if String.starts_with?(card, "E004") or String.starts_with?(card, "012E") do
-      uid = card |> :binary.bin_to_list() |> Enum.filter(&(&1 in ~c"0123456789ABCDEF")) |> IO.iodata_to_binary()
+      uid =
+        card
+        |> :binary.bin_to_list()
+        |> Enum.filter(&(&1 in ~c"0123456789ABCDEF"))
+        |> IO.iodata_to_binary()
 
       case to_konami_id_safe(uid) do
         {:ok, kid} -> %{"uid" => uid, "konami_id" => kid}

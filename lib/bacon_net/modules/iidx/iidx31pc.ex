@@ -123,7 +123,8 @@ defmodule BaconNet.Modules.Iidx.Iidx31pc do
     skin_type = if date_code >= 20_240_116_00, do: "s32", else: "s16"
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e(
           "IIDX31pc",
           [
@@ -314,7 +315,8 @@ defmodule BaconNet.Modules.Iidx.Iidx31pc do
               join_name: Config.arcade(),
               joinflg: 1
             ),
-            E.e("leggendaria",
+            E.e(
+              "leggendaria",
               E.e("flg1", Map.get(profile, "leggendaria_flg1", [-1, -1, -1]), __type: "s64")
             ),
             E.e(
@@ -327,7 +329,8 @@ defmodule BaconNet.Modules.Iidx.Iidx31pc do
               E.e("flg1", Map.get(profile, "wt_flg1", [-1, -1, -1]), __type: "s64"),
               E.e("flg2", Map.get(profile, "wt_flg2", [-1, -1, -1]), __type: "s64")
             ]),
-            E.e("world_tourism_setting",
+            E.e(
+              "world_tourism_setting",
               E.e("booster", 1, __type: "bool")
             ),
             E.e(
@@ -355,11 +358,9 @@ defmodule BaconNet.Modules.Iidx.Iidx31pc do
               ],
               headphone_vol: Map.get(profile, "lightning_setting_headphone_vol", 0),
               resistance_sp_left: Map.get(profile, "lightning_setting_resistance_sp_left", 0),
-              resistance_sp_right:
-                Map.get(profile, "lightning_setting_resistance_sp_right", 0),
+              resistance_sp_right: Map.get(profile, "lightning_setting_resistance_sp_right", 0),
               resistance_dp_left: Map.get(profile, "lightning_setting_resistance_dp_left", 0),
-              resistance_dp_right:
-                Map.get(profile, "lightning_setting_resistance_dp_right", 0),
+              resistance_dp_right: Map.get(profile, "lightning_setting_resistance_dp_right", 0),
               keyboard_kind: Map.get(profile, "lightning_setting_keyboard_kind", 0),
               brightness: Map.get(profile, "lightning_setting_brightness", 0)
             ),
@@ -457,7 +458,8 @@ defmodule BaconNet.Modules.Iidx.Iidx31pc do
             E.e("ea_premium_course"),
             E.e("language_setting", language: profile["language_setting"]),
             E.e("movie_agreement", agreement_version: Map.get(profile, "movie_agreement", 0)),
-            E.e("movie_setting",
+            E.e(
+              "movie_setting",
               E.e("hide_name", Map.get(profile, "hide_name", 0), __type: "bool")
             ),
             E.e("lightning_play_data",
@@ -479,7 +481,8 @@ defmodule BaconNet.Modules.Iidx.Iidx31pc do
               E.e("disp_kac_mark"),
               E.e("is_kac_entry"),
               E.e("is_kac_evnet_entry"),
-              E.e("kac_secret_music",
+              E.e(
+                "kac_secret_music",
                 E.e("music_info",
                   index: 0,
                   music_id: 1000
@@ -562,7 +565,8 @@ defmodule BaconNet.Modules.Iidx.Iidx31pc do
                 chara_2: -1
               ),
               E.e("defeat", defeat_flg: 0),
-              E.e("total_defeat",
+              E.e(
+                "total_defeat",
                 E.e("chara",
                   id: 0,
                   num: 0
@@ -633,7 +637,8 @@ defmodule BaconNet.Modules.Iidx.Iidx31pc do
       end
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e(
           "IIDX31pc",
           [
@@ -806,8 +811,15 @@ defmodule BaconNet.Modules.Iidx.Iidx31pc do
             end
 
           case XNode.child(lightning_setting, "concentration") do
-            nil -> gp
-            concentration -> Map.put(gp, "lightning_setting_concentration", String.to_integer(concentration.text))
+            nil ->
+              gp
+
+            concentration ->
+              Map.put(
+                gp,
+                "lightning_setting_concentration",
+                String.to_integer(concentration.text)
+              )
           end
       end
 
@@ -910,8 +922,11 @@ defmodule BaconNet.Modules.Iidx.Iidx31pc do
             )
 
           case XNode.child(step, "is_track_ticket") do
-            nil -> gp
-            is_track_ticket -> Map.put(gp, "stepup_is_track_ticket", String.to_integer(is_track_ticket.text))
+            nil ->
+              gp
+
+            is_track_ticket ->
+              Map.put(gp, "stepup_is_track_ticket", String.to_integer(is_track_ticket.text))
           end
       end
 
@@ -1002,7 +1017,11 @@ defmodule BaconNet.Modules.Iidx.Iidx31pc do
               ],
               game_profile,
               fn k, acc ->
-                Map.put(acc, "achievements_" <> k, XNode.attr(achievements, k) |> String.to_integer())
+                Map.put(
+                  acc,
+                  "achievements_" <> k,
+                  XNode.attr(achievements, k) |> String.to_integer()
+                )
               end
             )
 
@@ -1043,7 +1062,11 @@ defmodule BaconNet.Modules.Iidx.Iidx31pc do
           game_profile
 
         language ->
-          Map.put(game_profile, "language_setting", XNode.attr(language, "language") |> String.to_integer())
+          Map.put(
+            game_profile,
+            "language_setting",
+            XNode.attr(language, "language") |> String.to_integer()
+          )
       end
 
     game_profile =
@@ -1079,7 +1102,8 @@ defmodule BaconNet.Modules.Iidx.Iidx31pc do
     {info, conn} = Core.process_request(conn)
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("IIDX31pc",
           aflg: 1,
           anum: 1,
@@ -1319,10 +1343,12 @@ defmodule BaconNet.Modules.Iidx.Iidx31pc do
     {info, conn} = Core.process_request(conn)
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e(
           "IIDX31pc",
-          for(i <- 0..5039,
+          for(
+            i <- 0..5039,
             do:
               E.e("ticket",
                 ticket_id: i,
@@ -1364,7 +1390,8 @@ defmodule BaconNet.Modules.Iidx.Iidx31pc do
     {info, conn} = Core.process_request(conn)
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e(
           "IIDX31pc",
           [

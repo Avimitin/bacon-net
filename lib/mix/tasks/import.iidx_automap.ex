@@ -107,8 +107,12 @@ defmodule Mix.Tasks.Import.IidxAutomap do
       score_stats = DB.get("iidx_score_stats", stats_conds) || %{}
 
       play_count = Map.get(score_stats, "play_count", 0) + 1
-      fc_count = Map.get(score_stats, "fc_count", 0) + if(clear_flg == @full_combo, do: 1, else: 0)
-      clear_count = Map.get(score_stats, "clear_count", 0) + if(clear_flg >= @easy_clear, do: 1, else: 0)
+
+      fc_count =
+        Map.get(score_stats, "fc_count", 0) + if(clear_flg == @full_combo, do: 1, else: 0)
+
+      clear_count =
+        Map.get(score_stats, "clear_count", 0) + if(clear_flg >= @easy_clear, do: 1, else: 0)
 
       score_stats =
         score_stats
@@ -146,7 +150,8 @@ defmodule Mix.Tasks.Import.IidxAutomap do
 
             new =
               for m <- XNode.children(music, "m"), m.text != nil do
-                score = m.text |> String.split(~r/\s+/, trim: true) |> Enum.map(&String.to_integer/1)
+                score =
+                  m.text |> String.split(~r/\s+/, trim: true) |> Enum.map(&String.to_integer/1)
 
                 if Enum.at(score, 0) == -1 do
                   music_id = Enum.at(score, 1)
@@ -154,8 +159,14 @@ defmodule Mix.Tasks.Import.IidxAutomap do
                   for difficulty <- 0..4,
                       d = difficulty + 2,
                       Enum.at(score, d) != -1 do
-                    [sp_dp, music_id, difficulty, Enum.at(score, d), Enum.at(score, d + 5),
-                     Enum.at(score, d + 10)]
+                    [
+                      sp_dp,
+                      music_id,
+                      difficulty,
+                      Enum.at(score, d),
+                      Enum.at(score, d + 5),
+                      Enum.at(score, d + 10)
+                    ]
                   end
                 else
                   # skip rivals

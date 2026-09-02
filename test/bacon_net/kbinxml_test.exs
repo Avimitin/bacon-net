@@ -105,10 +105,16 @@ defmodule BaconNet.KbinxmlTest do
 
   test "nested structure with attrs roundtrip" do
     node =
-      E.e("response",
-        E.e("services", [
-          E.e("item", name: "cardmng", url: "http://localhost/core")
-        ], expire: 10800, mode: "operation")
+      E.e(
+        "response",
+        E.e(
+          "services",
+          [
+            E.e("item", name: "cardmng", url: "http://localhost/core")
+          ],
+          expire: 10800,
+          mode: "operation"
+        )
       )
 
     doc = roundtrip(node)
@@ -134,7 +140,9 @@ defmodule BaconNet.KbinxmlTest do
   end
 
   test "decode text xml" do
-    xml = ~s(<?xml version="1.0" encoding="UTF-8"?><response><card dataid="X" __type="str">abc</card></response>)
+    xml =
+      ~s(<?xml version="1.0" encoding="UTF-8"?><response><card dataid="X" __type="str">abc</card></response>)
+
     doc = Kbinxml.decode(xml).node
     assert doc.tag == "response"
     card = XNode.child(doc, "card")

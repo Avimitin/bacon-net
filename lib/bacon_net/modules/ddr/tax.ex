@@ -15,7 +15,8 @@ defmodule BaconNet.Modules.Ddr.Tax do
     {info, conn} = Core.process_request(conn)
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("tax", E.e("phase", 0, __type: "s32"))
       )
 

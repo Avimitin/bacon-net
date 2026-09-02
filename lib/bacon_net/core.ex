@@ -74,7 +74,8 @@ defmodule BaconNet.Core do
       {:ok, %{}}
     else
       with {:ok, cl_int} <- parse_content_length(cl),
-           {:ok, xml_dec, is_encrypted} <- maybe_decrypt(conn, binary_part(body, 0, min(byte_size(body), cl_int))),
+           {:ok, xml_dec, is_encrypted} <-
+             maybe_decrypt(conn, binary_part(body, 0, min(byte_size(body), cl_int))),
            {:ok, xml_dec, compress} <- maybe_decompress(conn, xml_dec),
            {:ok, root, text, is_binxml} <- decode_xml(xml_dec) do
         if Config.verbose_log() do
@@ -86,7 +87,9 @@ defmodule BaconNet.Core do
         module = if module_node, do: module_node.tag
         method = module_node && XNode.attr(module_node, "method")
         command = module_node && XNode.attr(module_node, "command")
-        game_version = game_version_from_software_version([XNode.attr(root, "model") | model_parts])
+
+        game_version =
+          game_version_from_software_version([XNode.attr(root, "model") | model_parts])
 
         {:ok,
          %{

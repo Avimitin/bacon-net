@@ -17,17 +17,20 @@ defmodule BaconNet.Modules.Gitadora.Shopinfo do
     {info, conn} = Core.process_request(conn)
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("#{ver}_shopinfo", [
           E.e("data", [
             E.e("cabid", 1, __type: "u32"),
             E.e("locationid", "EA000001", __type: "str"),
             E.e("is_send", 0, __type: "u8")
           ]),
-          E.e("temperature",
+          E.e(
+            "temperature",
             E.e("is_send", 0, __type: "bool")
           ),
-          E.e("tax",
+          E.e(
+            "tax",
             E.e("tax_phase", 1, __type: "s32")
           )
         ])

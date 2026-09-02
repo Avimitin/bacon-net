@@ -45,7 +45,8 @@ defmodule BaconNet.Modules.Nostalgia.Op3Common do
     {info, conn} = Core.process_request(conn)
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("get_common_info", E.e("olupdate", E.e("delete_flag", 0, __type: "bool")))
       )
 
@@ -85,7 +86,8 @@ defmodule BaconNet.Modules.Nostalgia.Op3Common do
     flags = List.duplicate(-1, 32)
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("get_music_info", [
           E.e(
             "music_list",

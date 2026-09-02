@@ -54,7 +54,10 @@ defmodule BaconNet.Shop do
   def permit(pcbid, opname) when is_binary(pcbid) do
     if valid_pcbid?(pcbid) do
       fields = %{"pcbid" => pcbid, "permitted" => true}
-      fields = if is_binary(opname) and opname != "", do: Map.put(fields, "opname", opname), else: fields
+
+      fields =
+        if is_binary(opname) and opname != "", do: Map.put(fields, "opname", opname), else: fields
+
       DB.upsert(@table, fields, %{"pcbid" => pcbid})
       {:ok, DB.get(@table, %{"pcbid" => pcbid})}
     else

@@ -75,7 +75,10 @@ defmodule BaconNet.Modules.Ddr.Playerdata2 do
     refid = find_text(data, "refid")
 
     base = "X0000000000000000000000000000000"
-    default = String.slice(base, 0, max(String.length(base) - String.length(gamesession), 0)) <> gamesession
+
+    default =
+      String.slice(base, 0, max(String.length(base) - String.length(gamesession), 0)) <>
+        gamesession
 
     all_profiles_for_card = DB.get("ddr_profile", %{"card" => refid})
 
@@ -115,7 +118,8 @@ defmodule BaconNet.Modules.Ddr.Playerdata2 do
           ddr_id_str = Integer.to_string(ddr_id)
           seq = String.slice(ddr_id_str, 0, 4) <> "-" <> String.slice(ddr_id_str, 4..-1//1)
 
-          E.e("response",
+          E.e(
+            "response",
             E.e("playerdata_2", [
               E.e("result", 0, __type: "s32"),
               E.e("seq", seq, __type: "str"),
@@ -174,7 +178,8 @@ defmodule BaconNet.Modules.Ddr.Playerdata2 do
               ])
             end
 
-          E.e("response",
+          E.e(
+            "response",
             E.e(
               "playerdata_2",
               [
@@ -197,7 +202,8 @@ defmodule BaconNet.Modules.Ddr.Playerdata2 do
           )
 
         mode == "userload" and refid == default ->
-          E.e("response",
+          E.e(
+            "response",
             E.e("playerdata_2", [
               E.e("result", 0, __type: "s32"),
               E.e("is_new", 1, __type: "bool"),
@@ -211,7 +217,8 @@ defmodule BaconNet.Modules.Ddr.Playerdata2 do
           ghostid = find_int(data, "ghostid")
           record = get_doc_by_id("ddr_scores", ghostid)
 
-          E.e("response",
+          E.e(
+            "response",
             E.e("playerdata_2", [
               E.e("result", 0, __type: "s32"),
               E.e("ghostdata", [
@@ -302,8 +309,11 @@ defmodule BaconNet.Modules.Ddr.Playerdata2 do
             version = Map.fetch!(profile, "version")
             game_profile = Map.get(version, to_string(game_version), %{})
 
-            single_grade = data |> XNode.child("grade") |> XNode.child("single_grade") |> text_int()
-            double_grade = data |> XNode.child("grade") |> XNode.child("double_grade") |> text_int()
+            single_grade =
+              data |> XNode.child("grade") |> XNode.child("single_grade") |> text_int()
+
+            double_grade =
+              data |> XNode.child("grade") |> XNode.child("double_grade") |> text_int()
 
             opt_timing_disp =
               note
@@ -336,14 +346,22 @@ defmodule BaconNet.Modules.Ddr.Playerdata2 do
                 mcode = find_int(n, "mcode")
 
                 if find_int(n, "clearkind") != 1 do
-                  Enum.reduce(Enum.with_index(1000..1010, 1), {single_grade, double_grade}, fn {course_id, grade},
-                                                                                                {sg, dg} ->
-                    cond do
-                      playstyle in [0, 2] and mcode in [course_id, course_id + 11] -> {grade, dg}
-                      playstyle == 1 and mcode in [course_id + 1000, course_id + 1000 + 11] -> {sg, grade}
-                      true -> {sg, dg}
+                  Enum.reduce(
+                    Enum.with_index(1000..1010, 1),
+                    {single_grade, double_grade},
+                    fn {course_id, grade}, {sg, dg} ->
+                      cond do
+                        playstyle in [0, 2] and mcode in [course_id, course_id + 11] ->
+                          {grade, dg}
+
+                        playstyle == 1 and mcode in [course_id + 1000, course_id + 1000 + 11] ->
+                          {sg, grade}
+
+                        true ->
+                          {sg, dg}
+                      end
                     end
-                  end)
+                  )
                 else
                   {single_grade, double_grade}
                 end
@@ -353,11 +371,19 @@ defmodule BaconNet.Modules.Ddr.Playerdata2 do
 
             game_profile =
               game_profile
-              |> Map.put("single_grade", max(single_grade, Map.get(game_profile, "single_grade", single_grade)))
-              |> Map.put("double_grade", max(double_grade, Map.get(game_profile, "double_grade", double_grade)))
+              |> Map.put(
+                "single_grade",
+                max(single_grade, Map.get(game_profile, "single_grade", single_grade))
+              )
+              |> Map.put(
+                "double_grade",
+                max(double_grade, Map.get(game_profile, "double_grade", double_grade))
+              )
               |> Map.put("opt_timing_disp", opt_timing_disp)
 
-            profile = Map.put(profile, "version", Map.put(version, to_string(game_version), game_profile))
+            profile =
+              Map.put(profile, "version", Map.put(version, to_string(game_version), game_profile))
+
             DB.upsert("ddr_profile", profile, %{"card" => refid})
           end
 
@@ -379,7 +405,9 @@ defmodule BaconNet.Modules.Ddr.Playerdata2 do
 
               2 ->
                 best_per_song(
-                  fn doc -> Map.get(doc, "shoparea") == shoparea and Map.get(doc, "ddr_id") != 0 end,
+                  fn doc ->
+                    Map.get(doc, "shoparea") == shoparea and Map.get(doc, "ddr_id") != 0
+                  end,
                   game_version
                 )
 
@@ -421,7 +449,8 @@ defmodule BaconNet.Modules.Ddr.Playerdata2 do
               |> Base.encode64()
             end
 
-          E.e("response",
+          E.e(
+            "response",
             E.e("playerdata_2", [
               E.e("result", 0, __type: "s32"),
               E.e("data", for(s <- load, do: E.e("record", E.e("record_csv", s, __type: "str"))))
@@ -429,7 +458,8 @@ defmodule BaconNet.Modules.Ddr.Playerdata2 do
           )
 
         mode == "inheritance" ->
-          E.e("response",
+          E.e(
+            "response",
             E.e("playerdata_2", [
               E.e("result", 0, __type: "s32"),
               E.e("InheritanceStatus", 1, __type: "s32")
@@ -456,27 +486,51 @@ defmodule BaconNet.Modules.Ddr.Playerdata2 do
     profile = cid && get_game_profile(cid, game_version)
 
     if profile == nil do
-      Core.send_response(conn, info, E.e("response", E.e("playerdata_2", E.e("result", 1, __type: "s32"))))
+      Core.send_response(
+        conn,
+        info,
+        E.e("response", E.e("playerdata_2", E.e("result", 1, __type: "s32")))
+      )
     else
       common = profile |> Map.fetch!("common") |> String.split(",")
-      common = List.replace_at(common, 5, index_of!(@calories_disp, Map.fetch!(profile, "calories_disp")))
+
+      common =
+        List.replace_at(
+          common,
+          5,
+          index_of!(@calories_disp, Map.fetch!(profile, "calories_disp"))
+        )
 
       common =
         List.replace_at(
           common,
           6,
-          @characters |> index_of!(Map.fetch!(profile, "character")) |> Integer.to_string(16) |> String.downcase()
+          @characters
+          |> index_of!(Map.fetch!(profile, "character"))
+          |> Integer.to_string(16)
+          |> String.downcase()
         )
 
       common = List.replace_at(common, 9, 1)
       common_load = Enum.map_join(common, ",", &to_string/1)
 
       option = profile |> Map.fetch!("option") |> String.split(",")
-      option = List.replace_at(option, 13, index_of!(@arrow_skins, Map.fetch!(profile, "arrow_skin")))
-      option = List.replace_at(option, 14, index_of!(@screen_filters, Map.fetch!(profile, "filter")))
-      option = List.replace_at(option, 15, index_of!(@guidelines, Map.fetch!(profile, "guideline")))
-      option = List.replace_at(option, 17, index_of!(@priorities, Map.fetch!(profile, "priority")))
-      option = List.replace_at(option, 18, index_of!(@timing_disps, Map.fetch!(profile, "timing_disp")))
+
+      option =
+        List.replace_at(option, 13, index_of!(@arrow_skins, Map.fetch!(profile, "arrow_skin")))
+
+      option =
+        List.replace_at(option, 14, index_of!(@screen_filters, Map.fetch!(profile, "filter")))
+
+      option =
+        List.replace_at(option, 15, index_of!(@guidelines, Map.fetch!(profile, "guideline")))
+
+      option =
+        List.replace_at(option, 17, index_of!(@priorities, Map.fetch!(profile, "priority")))
+
+      option =
+        List.replace_at(option, 18, index_of!(@timing_disps, Map.fetch!(profile, "timing_disp")))
+
       option_load = Enum.map_join(option, ",", &to_string/1)
 
       rival = profile |> Map.fetch!("rival") |> String.split(",")
@@ -505,12 +559,17 @@ defmodule BaconNet.Modules.Ddr.Playerdata2 do
       load = [
         common_load |> String.split("ffffffff,COMMON,") |> Enum.fetch!(1) |> Base.encode64(),
         option_load |> String.split("ffffffff,OPTION,") |> Enum.fetch!(1) |> Base.encode64(),
-        profile |> Map.fetch!("last") |> String.split("ffffffff,LAST,") |> Enum.fetch!(1) |> Base.encode64(),
+        profile
+        |> Map.fetch!("last")
+        |> String.split("ffffffff,LAST,")
+        |> Enum.fetch!(1)
+        |> Base.encode64(),
         rival_load |> String.split("ffffffff,RIVAL,") |> Enum.fetch!(1) |> Base.encode64()
       ]
 
       response =
-        E.e("response",
+        E.e(
+          "response",
           E.e("playerdata_2", [
             E.e("result", 0, __type: "s32"),
             E.e("player", [
@@ -562,7 +621,7 @@ defmodule BaconNet.Modules.Ddr.Playerdata2 do
             |> Map.put("rival", decode.(3))
 
           Enum.reduce(["rival_1_ddr_id", "rival_2_ddr_id", "rival_3_ddr_id"], game_profile, fn r,
-                                                                                              acc ->
+                                                                                               acc ->
             Map.put_new(acc, r, 0)
           end)
 

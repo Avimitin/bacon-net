@@ -25,7 +25,9 @@ defmodule BaconNet.CoreTest do
   end
 
   defp services_body do
-    Kbinxml.encode(E.e("call", E.e("services", method: "get"), model: @model, srcid: "CORETESTPCBID001"))
+    Kbinxml.encode(
+      E.e("call", E.e("services", method: "get"), model: @model, srcid: "CORETESTPCBID001")
+    )
   end
 
   test "garbage body returns 400 instead of crashing" do

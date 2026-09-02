@@ -151,7 +151,8 @@ defmodule BaconNet.Modules.Iidx.Iidx32pc do
       end)
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("IIDX32pc", [
           E.e("pcdata",
             bgnflg: Map.get(profile, "bgnflg", 0),
@@ -355,7 +356,8 @@ defmodule BaconNet.Modules.Iidx.Iidx32pc do
             E.e("disp_kac_mark"),
             E.e("is_kac_entry"),
             E.e("is_kac_evnet_entry"),
-            E.e("kac_secret_music",
+            E.e(
+              "kac_secret_music",
               E.e("music_info",
                 index: 0,
                 music_id: 1000
@@ -526,14 +528,16 @@ defmodule BaconNet.Modules.Iidx.Iidx32pc do
           E.e("triple_tribe_4", music_list: -1),
           E.e("language_setting", language: profile["language_setting"]),
           E.e("movie_agreement", agreement_version: Map.get(profile, "movie_agreement", 0)),
-          E.e("movie_setting",
+          E.e(
+            "movie_setting",
             E.e("hide_name", Map.get(profile, "hide_name", 0), __type: "bool")
           ),
           E.e("world_tourism_secret_flg", [
             E.e("flg1", Map.get(profile, "wt_flg1", [-1, -1, -1]), __type: "s64"),
             E.e("flg2", Map.get(profile, "wt_flg2", [-1, -1, -1]), __type: "s64")
           ]),
-          E.e("world_tourism_setting",
+          E.e(
+            "world_tourism_setting",
             E.e("booster", 1, __type: "bool")
           )
         ])
@@ -577,7 +581,8 @@ defmodule BaconNet.Modules.Iidx.Iidx32pc do
       end
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e(
           "IIDX32pc",
           [
@@ -751,8 +756,15 @@ defmodule BaconNet.Modules.Iidx.Iidx32pc do
             end
 
           case XNode.child(lightning_setting, "concentration") do
-            nil -> gp
-            concentration -> Map.put(gp, "lightning_setting_concentration", String.to_integer(concentration.text))
+            nil ->
+              gp
+
+            concentration ->
+              Map.put(
+                gp,
+                "lightning_setting_concentration",
+                String.to_integer(concentration.text)
+              )
           end
       end
 
@@ -862,8 +874,11 @@ defmodule BaconNet.Modules.Iidx.Iidx32pc do
             )
 
           case XNode.child(step, "is_track_ticket") do
-            nil -> gp
-            is_track_ticket -> Map.put(gp, "stepup_is_track_ticket", String.to_integer(is_track_ticket.text))
+            nil ->
+              gp
+
+            is_track_ticket ->
+              Map.put(gp, "stepup_is_track_ticket", String.to_integer(is_track_ticket.text))
           end
       end
 
@@ -954,7 +969,11 @@ defmodule BaconNet.Modules.Iidx.Iidx32pc do
               ],
               game_profile,
               fn k, acc ->
-                Map.put(acc, "achievements_" <> k, XNode.attr(achievements, k) |> String.to_integer())
+                Map.put(
+                  acc,
+                  "achievements_" <> k,
+                  XNode.attr(achievements, k) |> String.to_integer()
+                )
               end
             )
 
@@ -995,7 +1014,11 @@ defmodule BaconNet.Modules.Iidx.Iidx32pc do
           game_profile
 
         language ->
-          Map.put(game_profile, "language_setting", XNode.attr(language, "language") |> String.to_integer())
+          Map.put(
+            game_profile,
+            "language_setting",
+            XNode.attr(language, "language") |> String.to_integer()
+          )
       end
 
     game_profile =
@@ -1031,7 +1054,8 @@ defmodule BaconNet.Modules.Iidx.Iidx32pc do
     {info, conn} = Core.process_request(conn)
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("IIDX32pc",
           aflg: 1,
           anum: 1,
@@ -1278,10 +1302,12 @@ defmodule BaconNet.Modules.Iidx.Iidx32pc do
     {info, conn} = Core.process_request(conn)
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e(
           "IIDX32pc",
-          for(i <- 0..5039,
+          for(
+            i <- 0..5039,
             do:
               E.e("ticket",
                 ticket_id: i,
@@ -1323,7 +1349,8 @@ defmodule BaconNet.Modules.Iidx.Iidx32pc do
     {info, conn} = Core.process_request(conn)
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e(
           "IIDX32pc",
           [

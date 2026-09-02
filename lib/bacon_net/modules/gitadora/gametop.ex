@@ -140,7 +140,8 @@ defmodule BaconNet.Modules.Gitadora.Gametop do
     rivals = Map.get(profile, "rival_card_ids", [])
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e(
           "#{ver}_gametop",
           E.e(
@@ -164,25 +165,31 @@ defmodule BaconNet.Modules.Gitadora.Gametop do
                 end),
                 nr: length(mlist)
               ),
-              E.e("secretmusic",
+              E.e(
+                "secretmusic",
                 E.e("music", [
                   E.e("musicid", 1, __type: "s32"),
                   E.e("seq", 1, __type: "u16"),
                   E.e("kind", 1, __type: "s32")
                 ])
               ),
-              E.e("chara_list",
-                E.e("chara",
+              E.e(
+                "chara_list",
+                E.e(
+                  "chara",
                   E.e("charaid", 1, __type: "s32")
                 )
               ),
-              E.e("title_parts",
+              E.e(
+                "title_parts",
                 E.e("parts", "", __type: "str")
               ),
-              E.e("information",
+              E.e(
+                "information",
                 E.e("info", pg["information"], __type: "u32")
               ),
-              E.e("reward",
+              E.e(
+                "reward",
                 E.e("status", pg["reward"], __type: "u32")
               ),
               rivaldata(rivals),
@@ -192,7 +199,8 @@ defmodule BaconNet.Modules.Gitadora.Gametop do
                 E.e("grant_medal", 0, __type: "s32"),
                 E.e("grant_total_medal", pg["thanks_medal_granted_total_medal"], __type: "s32")
               ]),
-              E.e("skindata",
+              E.e(
+                "skindata",
                 E.e("skin", List.duplicate(0xFFFFFFFF, 100), __type: "u32")
               ),
               E.e("battledata", [
@@ -299,7 +307,8 @@ defmodule BaconNet.Modules.Gitadora.Gametop do
                 ])
               ]),
               E.e("sticker_campaign"),
-              E.e("kac2017",
+              E.e(
+                "kac2017",
                 E.e("entry_status", 0, __type: "s32")
               ),
               E.e("nostalgia_concert"),
@@ -338,15 +347,18 @@ defmodule BaconNet.Modules.Gitadora.Gametop do
                   E.e("bear_mark", 0, __type: "s32"),
                   E.e("play_date_ms", 0, __type: "u64")
                 ]),
-                E.e("lottery_result",
+                E.e(
+                  "lottery_result",
                   E.e("unlock_bit", 0, __type: "u64")
                 )
               ]),
               E.e("lotterybox"),
-              E.e("long_otobear_fes_1",
+              E.e(
+                "long_otobear_fes_1",
                 E.e("point", 0, __type: "s32")
               ),
-              E.e("phrase_combo_challenge",
+              E.e(
+                "phrase_combo_challenge",
                 E.e("point", 0, __type: "s32")
               )
             ] ++
@@ -379,10 +391,12 @@ defmodule BaconNet.Modules.Gitadora.Gametop do
                 E.e("kouyou_challenge_#{x}", E.e("point", 0, __type: "s32"))
               end) ++
               [
-                E.e("sdvx_stamprally3",
+                E.e(
+                  "sdvx_stamprally3",
                   E.e("point", 0, __type: "s32")
                 ),
-                E.e("chronicle_1",
+                E.e(
+                  "chronicle_1",
                   E.e("point", 0, __type: "s32")
                 ),
                 E.e("playerboard", [
@@ -565,10 +579,10 @@ defmodule BaconNet.Modules.Gitadora.Gametop do
                 ]),
                 E.e("finish", 1, __type: "bool")
               ],
-          no: no
+            no: no
+          )
         )
       )
-    )
 
     Core.send_response(conn, info, response)
   end

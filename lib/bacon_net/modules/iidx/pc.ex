@@ -63,7 +63,8 @@ defmodule BaconNet.Modules.Iidx.Pc do
     response =
       cond do
         game_version == 20 ->
-          E.e("response",
+          E.e(
+            "response",
             E.e("pc", [
               E.e("pcdata",
                 dach: profile["dach"],
@@ -168,13 +169,17 @@ defmodule BaconNet.Modules.Iidx.Pc do
                   E.e("p_attack", Map.get(profile, "yellowboss_p_attack", List.duplicate(0, 7)),
                     __type: "s32"
                   ),
-                  E.e("pbest_attack", Map.get(profile, "yellowboss_pbest_attack", List.duplicate(0, 7)),
+                  E.e(
+                    "pbest_attack",
+                    Map.get(profile, "yellowboss_pbest_attack", List.duplicate(0, 7)),
                     __type: "s32"
                   ),
                   E.e("defeat", Map.get(profile, "yellowboss_defeat", List.duplicate(0, 7)),
                     __type: "bool"
                   ),
-                  E.e("shop_damage", Map.get(profile, "yellowboss_shop_damage", List.duplicate(0, 7)),
+                  E.e(
+                    "shop_damage",
+                    Map.get(profile, "yellowboss_shop_damage", List.duplicate(0, 7)),
                     __type: "s32"
                   )
                 ],
@@ -295,7 +300,8 @@ defmodule BaconNet.Modules.Iidx.Pc do
           )
 
         game_version == 19 ->
-          E.e("response",
+          E.e(
+            "response",
             E.e("pc", [
               E.e("pcdata",
                 dach: profile["dach"],
@@ -416,7 +422,8 @@ defmodule BaconNet.Modules.Iidx.Pc do
           )
 
         game_version == 18 ->
-          E.e("response",
+          E.e(
+            "response",
             E.e("pc", [
               E.e("pcdata",
                 dach: profile["dach"],
@@ -481,7 +488,8 @@ defmodule BaconNet.Modules.Iidx.Pc do
     response =
       cond do
         game_version == 20 ->
-          E.e("response",
+          E.e(
+            "response",
             E.e(
               "pc",
               [
@@ -498,7 +506,8 @@ defmodule BaconNet.Modules.Iidx.Pc do
                 E.e("cafe", open: 1),
                 E.e(
                   "yellow_correct",
-                  for(_ <- 1..6,
+                  for(
+                    _ <- 1..6,
                     do:
                       E.e("detail",
                         avg_shop: 7,
@@ -533,7 +542,8 @@ defmodule BaconNet.Modules.Iidx.Pc do
           )
 
         game_version == 19 ->
-          E.e("response",
+          E.e(
+            "response",
             E.e(
               "pc",
               [
@@ -552,7 +562,8 @@ defmodule BaconNet.Modules.Iidx.Pc do
           )
 
         game_version == 18 ->
-          E.e("response",
+          E.e(
+            "response",
             E.e(
               "pc",
               [
@@ -673,8 +684,11 @@ defmodule BaconNet.Modules.Iidx.Pc do
             )
 
           case XNode.child(step, "is_track_ticket") do
-            nil -> gp
-            is_track_ticket -> Map.put(gp, "stepup_is_track_ticket", String.to_integer(is_track_ticket.text))
+            nil ->
+              gp
+
+            is_track_ticket ->
+              Map.put(gp, "stepup_is_track_ticket", String.to_integer(is_track_ticket.text))
           end
       end
 
@@ -697,7 +711,11 @@ defmodule BaconNet.Modules.Iidx.Pc do
               ],
               game_profile,
               fn k, acc ->
-                Map.put(acc, "achievements_" <> k, XNode.attr(achievements, k) |> String.to_integer())
+                Map.put(
+                  acc,
+                  "achievements_" <> k,
+                  XNode.attr(achievements, k) |> String.to_integer()
+                )
               end
             )
 
@@ -750,7 +768,8 @@ defmodule BaconNet.Modules.Iidx.Pc do
     {info, conn} = Core.process_request(conn)
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("pc",
           aflg: 1,
           anum: 1,

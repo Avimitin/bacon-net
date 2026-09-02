@@ -127,8 +127,18 @@ defmodule BaconNet.MusicdataTool do
         {[spb, spn, sph, spa, 0, dpb, dpn, dph, dpa, 0], bin}
       end
 
-    [spb_level, spn_level, sph_level, spa_level, spl_level,
-     dpb_level, dpn_level, dph_level, dpa_level, dpl_level] = levels
+    [
+      spb_level,
+      spn_level,
+      sph_level,
+      spa_level,
+      spl_level,
+      dpb_level,
+      dpn_level,
+      dph_level,
+      dpa_level,
+      dpl_level
+    ] = levels
 
     bin =
       cond do
@@ -155,8 +165,18 @@ defmodule BaconNet.MusicdataTool do
         {[spb, spn, sph, spa, 48, dpb, dpn, dph, dpa, 48], bin}
       end
 
-    [spb_ident, spn_ident, sph_ident, spa_ident, spl_ident,
-     dpb_ident, dpn_ident, dph_ident, dpa_ident, dpl_ident] = idents
+    [
+      spb_ident,
+      spn_ident,
+      sph_ident,
+      spa_ident,
+      spl_ident,
+      dpb_ident,
+      dpn_ident,
+      dph_ident,
+      dpa_ident,
+      dpl_ident
+    ] = idents
 
     {bga_delay, bin} = s16(bin)
 
@@ -370,7 +390,10 @@ defmodule BaconNet.MusicdataTool do
       cond do
         version == 80 ->
           Base.decode16!(
-            hex_pad(1, 14) <> hex_pad(2, 8) <> hex_pad(3, 248) <> hex_pad(4, 8) <>
+            hex_pad(1, 14) <>
+              hex_pad(2, 8) <>
+              hex_pad(3, 248) <>
+              hex_pad(4, 8) <>
               hex_pad(3, 120) <> hex_pad(4, 8) <> hex_pad(0, 246)
           )
 
@@ -379,7 +402,10 @@ defmodule BaconNet.MusicdataTool do
 
         version >= 27 ->
           Base.decode16!(
-            hex_pad(1, 14) <> hex_pad(2, 8) <> hex_pad(3, 248) <> hex_pad(4, 8) <>
+            hex_pad(1, 14) <>
+              hex_pad(2, 8) <>
+              hex_pad(3, 248) <>
+              hex_pad(4, 8) <>
               hex_pad(0, 1014)
           )
 

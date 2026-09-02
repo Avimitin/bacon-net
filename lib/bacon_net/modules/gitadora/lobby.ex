@@ -26,14 +26,19 @@ defmodule BaconNet.Modules.Gitadora.Lobby do
       if host != %{} do
         resp =
           if host["ip"] != address_ip do
-            E.e("response",
-              E.e("lobby",
-                E.e("lobbydata",
+            E.e(
+              "response",
+              E.e(
+                "lobby",
+                E.e(
+                  "lobbydata",
                   E.e("candidate", [
-                    E.e("address",
+                    E.e(
+                      "address",
                       E.e("ip", host["ip"], __type: "str")
                     ),
-                    E.e("check",
+                    E.e(
+                      "check",
                       E.e("attestid", host["attestid"], __type: "str")
                     )
                   ])

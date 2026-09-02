@@ -7,18 +7,19 @@ defmodule BaconNet.Router do
 
   alias BaconNet.{Card, Config, Core, E, Registry}
 
-  plug :match
+  plug(:match)
 
-  plug BaconNet.Plugs.CORS
+  plug(BaconNet.Plugs.CORS)
 
-  plug BaconNet.Plugs.Webui
+  plug(BaconNet.Plugs.Webui)
 
-  plug Plug.Parsers,
+  plug(Plug.Parsers,
     parsers: [:multipart, :json],
     pass: ["*/*"],
     json_decoder: Jason
+  )
 
-  plug :dispatch
+  plug(:dispatch)
 
   ## services.get (pyeamu.py)
 
@@ -88,7 +89,12 @@ defmodule BaconNet.Router do
       |> String.replace("V", "U")
 
     if String.starts_with?(card, "E004") or String.starts_with?(card, "012E") do
-      uid = card |> :binary.bin_to_list() |> Enum.filter(&(&1 in ~c"0123456789ABCDEF")) |> IO.iodata_to_binary()
+      uid =
+        card
+        |> :binary.bin_to_list()
+        |> Enum.filter(&(&1 in ~c"0123456789ABCDEF"))
+        |> IO.iodata_to_binary()
+
       json(conn, %{"uid" => uid, "konami_id" => Card.to_konami_id(uid)})
     else
       valid = Card.valid_characters() |> :binary.bin_to_list()
@@ -206,7 +212,8 @@ defmodule BaconNet.Router do
         ]
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("services", items, expire: 10800, mode: "operation", product_domain: 1)
       )
 
@@ -237,7 +244,12 @@ defmodule BaconNet.Router do
 
         game_code == "M32" ->
           gd_module = String.split(module, "_")
-          Registry.dispatch_by_name(conn, "gitadora_#{List.last(gd_module)}_#{method}", hd(gd_module))
+
+          Registry.dispatch_by_name(
+            conn,
+            "gitadora_#{List.last(gd_module)}_#{method}",
+            hd(gd_module)
+          )
 
         true ->
           :not_found

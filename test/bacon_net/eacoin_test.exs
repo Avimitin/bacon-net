@@ -133,7 +133,10 @@ defmodule BaconNet.EacoinTest do
   end
 
   test "threshold reset is reflected in both response and storage" do
-    DB.upsert("paseli", %{"cardid" => @card, "balance" => 1_500, "total_spent" => 0}, %{"cardid" => @card})
+    DB.upsert("paseli", %{"cardid" => @card, "balance" => 1_500, "total_spent" => 0}, %{
+      "cardid" => @card
+    })
+
     sessid = checkin()
 
     node = consume(sessid, 600) |> eacoin_node()

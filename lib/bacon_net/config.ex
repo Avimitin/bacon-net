@@ -28,7 +28,10 @@ defmodule BaconNet.Config do
   def arcade, do: Application.get_env(:bacon_net, :arcade, @default_arcade)
   def paseli, do: Application.get_env(:bacon_net, :paseli, 10_000)
   def maintenance_mode, do: Application.get_env(:bacon_net, :maintenance_mode, false)
-  def max_decompressed_body, do: Application.get_env(:bacon_net, :max_decompressed_body, 16_000_000)
+
+  def max_decompressed_body,
+    do: Application.get_env(:bacon_net, :max_decompressed_body, 16_000_000)
+
   def cors_origins, do: Application.get_env(:bacon_net, :cors_origins, [])
 
   @doc "Legacy unauthenticated per-game JSON APIs (/iidx, /ddr, /gfdm); disabled by default."

@@ -20,7 +20,8 @@ defmodule BaconNet.Modules.Iidx.Shop do
     {info, conn} = Core.process_request(conn)
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("shop",
           cls_opt: 0,
           opname: Config.arcade(),
@@ -35,7 +36,8 @@ defmodule BaconNet.Modules.Iidx.Shop do
     {info, conn} = Core.process_request(conn)
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("shop", E.e("valid", 1, __type: "bool"),
           music_0: -1,
           music_1: -1,

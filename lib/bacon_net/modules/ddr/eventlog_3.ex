@@ -15,7 +15,8 @@ defmodule BaconNet.Modules.Ddr.Eventlog3 do
     {info, conn} = Core.process_request(conn)
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("eventlog_3", [
           E.e("gamesession", 9_999_999, __type: "s64"),
           E.e("logsendflg", 1, __type: "s32"),

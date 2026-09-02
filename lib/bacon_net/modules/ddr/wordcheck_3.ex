@@ -15,7 +15,8 @@ defmodule BaconNet.Modules.Ddr.Wordcheck3 do
     {info, conn} = Core.process_request(conn)
 
     response =
-      E.e("response",
+      E.e(
+        "response",
         E.e("wordcheck_3", [
           E.e("result", 0, __type: "s32"),
           E.e("is_taboo", 0, __type: "bool")

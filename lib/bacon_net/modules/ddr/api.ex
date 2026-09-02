@@ -293,7 +293,9 @@ defmodule BaconNet.Modules.Ddr.Api do
   defp from_xmerl(elem) do
     tag = elem |> Kernel.elem(1) |> to_string()
     content = Kernel.elem(elem, 8)
-    children = for c <- content, is_tuple(c) and Kernel.elem(c, 0) == :xmlElement, do: from_xmerl(c)
+
+    children =
+      for c <- content, is_tuple(c) and Kernel.elem(c, 0) == :xmlElement, do: from_xmerl(c)
 
     text =
       content

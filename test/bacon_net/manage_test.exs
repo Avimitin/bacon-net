@@ -141,7 +141,9 @@ defmodule BaconNet.ManageTest do
 
   test "shop permit management" do
     # add a permitted shop
-    conn = call(:post, "/manage/api/shops", %{"pcbid" => "SHOPTESTPCBID01", "opname" => "TEST SHOP"})
+    conn =
+      call(:post, "/manage/api/shops", %{"pcbid" => "SHOPTESTPCBID01", "opname" => "TEST SHOP"})
+
     assert conn.status == 201
     assert %{"pcbid" => "SHOPTESTPCBID01", "permitted" => true} = json(conn)
 
@@ -187,7 +189,11 @@ defmodule BaconNet.ManageTest do
       "created_at" => 1
     })
 
-    DB.insert("webui_sessions", %{"token" => "tok1", "username" => "villain", "expires_at" => 9_999_999_999})
+    DB.insert("webui_sessions", %{
+      "token" => "tok1",
+      "username" => "villain",
+      "expires_at" => 9_999_999_999
+    })
 
     # list hides credentials
     conn = call(:get, "/manage/api/users")
@@ -229,7 +235,8 @@ defmodule BaconNet.ManageTest do
       conn = call(:get, "/webui")
       assert conn.status == 301
     after
-      if old, do: Application.put_env(:bacon_net, :webui_dir, old),
+      if old,
+        do: Application.put_env(:bacon_net, :webui_dir, old),
         else: Application.delete_env(:bacon_net, :webui_dir)
 
       File.rm_rf!(dir)

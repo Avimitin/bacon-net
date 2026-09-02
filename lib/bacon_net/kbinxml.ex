@@ -13,14 +13,19 @@ defmodule BaconNet.Kbinxml do
   alias BaconNet.{CP932, XNode}
   alias BaconNet.Kbinxml.{Formats, Sixbit}
 
-
   @signature 0xA0
   @sig_compressed 0x42
   @sig_uncompressed 0x45
 
   @encoding_bytes %{cp932: 0x80, ascii: 0x20, latin1: 0x40, euc_jp: 0x60, utf8: 0xA0}
-  @byte_encodings %{0x00 => :cp932, 0x20 => :ascii, 0x40 => :latin1, 0x60 => :euc_jp,
-                    0x80 => :cp932, 0xA0 => :utf8}
+  @byte_encodings %{
+    0x00 => :cp932,
+    0x20 => :ascii,
+    0x40 => :latin1,
+    0x60 => :euc_jp,
+    0x80 => :cp932,
+    0xA0 => :utf8
+  }
 
   defstruct node: nil, encoding: :cp932, compressed: true
 
@@ -261,6 +266,7 @@ defmodule BaconNet.Kbinxml do
           Enum.map_join(values, "", fn v ->
             v |> Integer.to_string(16) |> String.downcase() |> String.pad_leading(2, "0")
           end)
+
         {hex, [{"__size", Integer.to_string(total_count)} | extra_attrs], st}
 
       fmt.name == "str" ->
@@ -306,8 +312,7 @@ defmodule BaconNet.Kbinxml do
           {read_values(st.input, st.word, fmt, count), %{st | word: st.word + size}}
 
         true ->
-          {read_values(st.input, st.main, fmt, count),
-           %{st | main: align4(st.main + size)}}
+          {read_values(st.input, st.main, fmt, count), %{st | main: align4(st.main + size)}}
       end
 
     trailing = max(st.byte, st.word)
@@ -315,7 +320,7 @@ defmodule BaconNet.Kbinxml do
     {values, st}
   end
 
-  defp align4(off), do: (off + 3) &&& ~~~3
+  defp align4(off), do: off + 3 &&& ~~~3
 
   ## Value unpacking
 
@@ -470,7 +475,7 @@ defmodule BaconNet.Kbinxml do
       %{st | node: [Sixbit.pack(name) | st.node]}
     else
       enc = encode_string(name, st.encoding)
-      %{st | node: [[(byte_size(enc) - 1) ||| 64, enc] | st.node]}
+      %{st | node: [[byte_size(enc) - 1 ||| 64, enc] | st.node]}
     end
   end
 
@@ -587,7 +592,10 @@ defmodule BaconNet.Kbinxml do
   end
 
   defp escape_text(s) do
-    s |> String.replace("&", "&amp;") |> String.replace("<", "&lt;") |> String.replace(">", "&gt;")
+    s
+    |> String.replace("&", "&amp;")
+    |> String.replace("<", "&lt;")
+    |> String.replace(">", "&gt;")
   end
 
   defp escape_attr(s) do
