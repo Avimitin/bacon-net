@@ -69,7 +69,7 @@ defmodule BaconNet.DB do
     result =
       data
       |> Map.get(table, %{})
-      |> Map.values()
+      |> sorted_docs()
       |> Enum.find(&matches?(&1, conds))
 
     {:reply, result, data}
@@ -79,14 +79,14 @@ defmodule BaconNet.DB do
     result =
       data
       |> Map.get(table, %{})
-      |> Map.values()
+      |> sorted_docs()
       |> Enum.filter(&matches?(&1, conds))
 
     {:reply, result, data}
   end
 
   def handle_call({:all, table}, _from, data) do
-    {:reply, data |> Map.get(table, %{}) |> Map.values(), data}
+    {:reply, data |> Map.get(table, %{}) |> sorted_docs(), data}
   end
 
   def handle_call({:insert, table, doc}, _from, data) do
@@ -143,6 +143,19 @@ defmodule BaconNet.DB do
   end
 
   ## Internals
+
+  # TinyDB iterates documents in insertion order, which matches ascending
+  # numeric document ids.
+  defp sorted_docs(docs) do
+    docs
+    |> Enum.sort_by(fn {id, _doc} ->
+      case Integer.parse(id) do
+        {n, _} -> n
+        :error -> 0
+      end
+    end)
+    |> Enum.map(fn {_id, doc} -> doc end)
+  end
 
   defp matches?(doc, conds) do
     Enum.all?(conds, fn {k, v} -> Map.get(doc, k) == v end)

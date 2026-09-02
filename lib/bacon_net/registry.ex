@@ -239,6 +239,6 @@ defmodule BaconNet.Registry do
 
     value
     |> String.trim_leading(pre)
-    |> String.trim_trailing(post)
+    |> then(fn v -> if post == "", do: v, else: String.trim_trailing(v, post) end)
   end
 end

@@ -105,7 +105,7 @@ Documents are maps with string keys, exactly like the TinyDB JSON.
 * `random.randint(a, b)` → `:rand.uniform(b - a + 1) + a - 1`
 * `random.choice(list)` → `Enum.random(list)`
 * Module-level mutable globals → `BaconNet.State` (see eacoin.ex)
-* `f"{x:08d}"` → `:io_lib.format("~8.8.0d", [x]) |> IO.iodata_to_binary()`
+* `f"{x:08d}"` → `Integer.to_string(x) |> String.pad_leading(8, "0")`
 * `str.split(" ")` → `String.split(" ", trim: true)`
 * JSON API handlers: `fun.(conn, params)` returns conn; respond with
   `BaconNet.Api.json(conn, data)`. PATCH bodies arrive parsed in
