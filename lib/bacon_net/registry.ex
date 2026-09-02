@@ -238,7 +238,7 @@ defmodule BaconNet.Registry do
     [pre, post] = String.split(pattern, "{ver}")
 
     value
-    |> String.trim_leading(pre)
+    |> then(fn v -> if pre == "", do: v, else: String.trim_leading(v, pre) end)
     |> then(fn v -> if post == "", do: v, else: String.trim_trailing(v, post) end)
   end
 end

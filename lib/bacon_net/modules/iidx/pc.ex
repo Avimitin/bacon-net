@@ -33,7 +33,7 @@ defmodule BaconNet.Modules.Iidx.Pc do
   defp get_id_from_profile(cid) do
     profile = DB.get("iidx_profile", %{"card" => cid})
 
-    djid = :io_lib.format("~8.8.0d", [profile["iidx_id"]]) |> IO.iodata_to_binary()
+    djid = Integer.to_string(profile["iidx_id"]) |> String.pad_leading(8, "0")
     djid_split = String.slice(djid, 0, 4) <> "-" <> String.slice(djid, 4, 4)
 
     {profile["iidx_id"], djid_split}

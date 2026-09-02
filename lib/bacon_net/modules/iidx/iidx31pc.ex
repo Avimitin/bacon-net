@@ -47,7 +47,7 @@ defmodule BaconNet.Modules.Iidx.Iidx31pc do
   defp get_id_from_profile(cid) do
     profile = DB.get("iidx_profile", %{"card" => cid})
 
-    djid = :io_lib.format("~8.8.0d", [profile["iidx_id"]]) |> IO.iodata_to_binary()
+    djid = Integer.to_string(profile["iidx_id"]) |> String.pad_leading(8, "0")
     djid_split = String.slice(djid, 0, 4) <> "-" <> String.slice(djid, 4, 4)
 
     {profile["iidx_id"], djid_split}
@@ -98,7 +98,7 @@ defmodule BaconNet.Modules.Iidx.Iidx31pc do
       |> Enum.filter(fn {r, _idx} -> r != 0 end)
       |> Enum.map(fn {r, idx} ->
         rival_profile = get_game_profile_by_id(r, game_version)
-        rdjid = :io_lib.format("~8.8.0d", [r]) |> IO.iodata_to_binary()
+        rdjid = Integer.to_string(r) |> String.pad_leading(8, "0")
         rdjid_split = String.slice(rdjid, 0, 4) <> "-" <> String.slice(rdjid, 4, 4)
 
         %{

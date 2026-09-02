@@ -12,7 +12,7 @@ defmodule BaconNet.Router do
   plug BaconNet.Plugs.CORS
 
   plug Plug.Parsers,
-    parsers: [:urlencoded, :multipart, :json],
+    parsers: [:multipart, :json],
     pass: ["*/*"],
     json_decoder: Jason
 
