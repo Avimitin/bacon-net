@@ -3,9 +3,16 @@
 Experimental e-amusement server intended for testing hacks, also usable by
 players — an Elixir rewrite of [MonkeyBusiness](https://github.com/drmext/MonkeyBusiness).
 
-All binary dependencies (Elixir, Erlang/OTP, mix/hex tooling) are managed by
-[Nix](https://nixos.org/) via the included flake; only a working `nix`
-command is required.
+Monorepo layout:
+
+- `/` — Elixir server (Bandit/Plug, no Phoenix); game protocol, JSON APIs,
+  TinyDB-compatible store
+- `frontend/` — pure static webui (Vite + vanilla JS) for browsing and
+  editing user data, served by the server under `/webui`
+
+All binary dependencies (Elixir, Erlang/OTP, Node.js/npm, mix/hex tooling)
+are managed by [Nix](https://nixos.org/) via the included flake; only a
+working `nix` command is required.
 
 ## Usage
 
@@ -22,15 +29,16 @@ or without entering the shell:
 ./start.sh
 ```
 
-Release build (fully Nix-managed, offline after first fetch):
+Release build (fully Nix-managed, offline after first fetch; the webui in
+`frontend/` is built and bundled in automatically):
 
 ```sh
 nix build
 ./result/bin/bacon_net start
 ```
 
-[web interface](https://github.com/drmext/BounceTrippy/releases) —
-unpack into `webui/` next to the working directory.
+The built-in web interface for managing user data lives at
+`http://localhost:8000/webui/` (see `frontend/README.md` for development).
 
 ## Configuration
 
@@ -46,8 +54,22 @@ In releases, override via environment (`config/runtime.exs`):
 | `BACON_VERBOSE_LOG`          | `1` (`0` disables)   |
 | `BACON_RESPONSE_COMPRESSION` | `0` (`1` enables)    |
 | `BACON_MAINTENANCE_MODE`     | `0` (`1` enables)    |
+| `BACON_WEBUI_DIR`            | bundled webui        |
 
 The database is a TinyDB-compatible `db.json` in the working directory.
+
+## Management API
+
+REST API backing the webui (also usable standalone; JSON in/out, no auth —
+bind to localhost or firewall accordingly):
+
+- `GET /manage/api/tables` — every DB table with document counts
+- `GET /manage/api/cards` — all documents with a `card` field, grouped by card
+- `GET /manage/api/table/{table}` / `POST` (insert)
+- `GET /manage/api/table/{table}/{id}` / `PUT` (replace) / `PATCH` (merge) / `DELETE`
+- `DELETE /manage/api/table/{table}` — drop a whole table
+
+Documents are returned with their TinyDB id inlined as `_id`.
 
 ## Playable Games
 
@@ -78,6 +100,18 @@ mix run --no-halt                     # dev server
 elixir -pa _build/dev/lib/bacon_net/ebin -pa _build/dev/lib/jason/ebin \
   scripts/smoke_test.exs              # end-to-end checks for all seven games
 ```
+
+Frontend development (Node/npm come from the same `nix develop` shell):
+
+```sh
+cd frontend
+npm install
+npm run dev                           # vite dev server, proxies /manage + /config to :8000
+npm run build                         # static build into frontend/dist
+```
+
+To serve a fresh frontend build from the dev server, copy it into place:
+`cp -r frontend/dist/* priv/static/` (releases do this automatically).
 
 `PORTING.md` documents the Python→Elixir architecture mapping for contributors.
 

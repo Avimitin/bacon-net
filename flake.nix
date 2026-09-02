@@ -35,6 +35,20 @@
           '';
         };
 
+        packages.frontend = pkgs.buildNpmPackage {
+          pname = "bacon-net-webui";
+          version = "0.1.0";
+          src = ./frontend;
+
+          npmDepsHash = "sha256-uRq6SvQuCwxt9LdZ8wmphEWIG5Ty5YM+AisxQvLgok0=";
+
+          installPhase = ''
+            runHook preInstall
+            cp -r dist $out
+            runHook postInstall
+          '';
+        };
+
         packages.default = beam.mixRelease {
           pname = "bacon-net";
           version = "0.1.0";
@@ -42,6 +56,12 @@
 
           # keep releases/COOKIE so the server starts without extra env vars
           removeCookie = false;
+
+          # bundle the built webui so the release serves it under /webui
+          preBuild = ''
+            mkdir -p priv/static
+            cp -r ${self.packages.${system}.frontend}/* priv/static/
+          '';
 
           mixFodDeps = beam.fetchMixDeps {
             pname = "bacon-net-deps";
