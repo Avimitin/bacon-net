@@ -347,9 +347,8 @@ defmodule BaconNet.Modules.Ddr.Api do
   end
 
   defp table_with_ids(table) do
-    DB
-    |> :sys.get_state()
-    |> Map.get(table, %{})
+    table
+    |> DB.all_with_ids()
     |> Map.new(fn {id, doc} -> {String.to_integer(id), doc} end)
   end
 end

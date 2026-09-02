@@ -786,13 +786,9 @@ defmodule BaconNet.Modules.Ddr.Playdata3 do
   defp to_int(v) when is_integer(v), do: v
   defp to_int(v) when is_binary(v), do: v |> String.trim() |> String.to_integer()
 
-  # TinyDB doc_id support: the DB GenServer state holds the raw
-  # %{"table" => %{"id" => doc}} maps with 1-based, monotonically increasing
-  # numeric string ids, exactly like TinyDB's storage.
   defp table_with_ids(table) do
-    DB
-    |> :sys.get_state()
-    |> Map.get(table, %{})
+    table
+    |> DB.all_with_ids()
     |> Map.new(fn {id, doc} -> {String.to_integer(id), doc} end)
   end
 

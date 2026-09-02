@@ -1,6 +1,15 @@
 import Config
 
 if config_env() == :prod do
+  # Production never bootstraps a local cluster and never migrates on boot;
+  # run `bin/bacon_net eval "BaconNet.Release.migrate()"` explicitly.
+  config :bacon_net,
+    database_url: System.fetch_env!("DATABASE_URL"),
+    migrate_on_start: false
+
+  config :bacon_net, BaconNet.Repo,
+    pool_size: String.to_integer(System.get_env("BACON_DB_POOL_SIZE", "10"))
+
   # Optional environment overrides (all default to config.py values).
   if port = System.get_env("BACON_PORT") do
     config :bacon_net, port: String.to_integer(port)

@@ -10,7 +10,9 @@
 /db*.json
 /test_db.json
 /webui/
-/priv/
+/priv/cp932.bin
+/priv/static/
+/tmp/
 *.xml
 !/test/fixtures/*.xml
 

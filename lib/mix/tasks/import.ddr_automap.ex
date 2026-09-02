@@ -3,39 +3,39 @@ defmodule Mix.Tasks.Import.DdrAutomap do
   Import DDR scores from a spice automap XML dump
   (utils/db/import_ddr_spice_automap.py counterpart).
 
-      mix import.ddr_automap --automap_xml automap.xml --version 3 \
-        --monkey_db db.json --ddr_id 12345678
+      mix import.ddr_automap --automap_xml automap.xml --version 3 --ddr_id 12345678
 
   --version: 1=A20P, 2=A3, 3=WORLD (automap_xml source version, not destination)
+
+  Scores are written to the PostgreSQL database; import the profile first
+  with `mix bacon_net.import_json`.
   """
 
   use Mix.Task
 
   alias BaconNet.{DB, Kbinxml, XNode, CP932}
 
-  @shortdoc "Import DDR automap scores into db.json"
+  @shortdoc "Import DDR automap scores into the database"
 
   @impl true
   def run(args) do
     {opts, _argv, _} =
       OptionParser.parse(args,
-        strict: [automap_xml: :string, version: :integer, monkey_db: :string, ddr_id: :string]
+        strict: [automap_xml: :string, version: :integer, ddr_id: :string]
       )
 
     automap_xml = Keyword.get(opts, :automap_xml) || Mix.raise("--automap_xml is required")
     version = Keyword.get(opts, :version, 3)
-    monkey_db = Keyword.get(opts, :monkey_db) || Mix.raise("--monkey_db is required")
 
     ddr_id =
       (Keyword.get(opts, :ddr_id) || Mix.raise("--ddr_id is required"))
       |> String.replace("-", "")
       |> String.to_integer()
 
-    Application.put_env(:bacon_net, :db_path, monkey_db)
-    {:ok, _} = DB.start_link()
+    Mix.Task.run("app.start")
 
     if DB.get("ddr_profile", %{"ddr_id" => ddr_id}) == nil do
-      Mix.raise("ERROR: DDR profile #{ddr_id} not in #{monkey_db}")
+      Mix.raise("ERROR: DDR profile #{ddr_id} not in the database")
     end
 
     {playerdata, game_version} =
@@ -94,7 +94,7 @@ defmodule Mix.Tasks.Import.DdrAutomap do
     end
 
     IO.puts("")
-    IO.puts("#{total_count} scores imported to DDR profile #{ddr_id} in #{monkey_db}")
+    IO.puts("#{total_count} scores imported to DDR profile #{ddr_id}")
   end
 
   defp parse_scores(automap_xml, version, playerdata) do

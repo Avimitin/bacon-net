@@ -23,7 +23,10 @@ defmodule BaconNet.MixProject do
   defp deps do
     [
       {:bandit, "~> 1.5"},
-      {:jason, "~> 1.4"}
+      {:jason, "~> 1.4"},
+      {:ecto_sql, "~> 3.12"},
+      {:postgrex, ">= 0.0.0"},
+      {:telemetry_metrics, "~> 1.0"}
     ]
   end
 

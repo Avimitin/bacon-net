@@ -23,6 +23,7 @@
             erlang
             git
             nodejs_22
+            postgresql_16
             python3
           ];
 

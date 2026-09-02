@@ -65,49 +65,54 @@ defmodule BaconNet.DBTest do
     assert DB.all(@table) == [%{"a" => 1}, %{"a" => 2}]
   end
 
-  test "init starts empty when the database file is missing" do
-    path =
-      Path.join(System.tmp_dir!(), "bacon_db_missing_#{System.unique_integer([:positive])}.json")
+  test "transaction rolls back every enclosed write on error" do
+    DB.insert(@table, %{"a" => 1})
 
-    with_db_path(path, fn ->
-      assert {:ok, %{}} = DB.init([])
-    end)
+    assert {:error, :boom} =
+             DB.transaction(fn ->
+               DB.insert(@table, %{"a" => 2})
+               DB.update(@table, %{"a" => 99}, %{"a" => 1})
+               DB.rollback(:boom)
+             end)
+
+    assert DB.all(@table) == [%{"a" => 1}]
   end
 
-  test "init raises on malformed JSON" do
-    path =
-      Path.join(System.tmp_dir!(), "bacon_db_corrupt_#{System.unique_integer([:positive])}.json")
+  test "transaction commits all enclosed writes on success" do
+    assert {:ok, :done} =
+             DB.transaction(fn ->
+               DB.insert(@table, %{"a" => 1})
+               DB.insert(@table, %{"a" => 2})
+               :done
+             end)
 
-    File.write!(path, "{not json")
-
-    with_db_path(path, fn ->
-      assert_raise RuntimeError, ~r/malformed JSON/, fn -> DB.init([]) end
-    end)
-
-    File.rm(path)
+    assert DB.all(@table) == [%{"a" => 1}, %{"a" => 2}]
   end
 
-  test "init raises on unreadable database files other than :enoent" do
-    dir = Path.join(System.tmp_dir!(), "bacon_db_dir_#{System.unique_integer([:positive])}")
-    File.mkdir_p!(dir)
+  test "concurrent inserts never share a doc id" do
+    count = 50
 
-    with_db_path(dir, fn ->
-      assert_raise RuntimeError, ~r/failed to read database file/, fn -> DB.init([]) end
-    end)
+    ids =
+      1..count
+      |> Task.async_stream(fn _ -> elem(DB.insert_with_id(@table, %{}), 0) end,
+        max_concurrency: count,
+        timeout: 30_000
+      )
+      |> Enum.map(fn {:ok, id} -> id end)
 
-    File.rmdir(dir)
+    assert Enum.uniq(ids) == ids
+    assert length(ids) == count
   end
 
-  defp with_db_path(path, fun) do
-    old = Application.get_env(:bacon_net, :db_path)
-    Application.put_env(:bacon_net, :db_path, path)
+  test "conditions match nested maps and arrays by exact equality" do
+    DB.insert(@table, %{"a" => %{"x" => 1, "y" => 2}})
+    DB.insert(@table, %{"a" => %{"x" => 1}})
+    DB.insert(@table, %{"a" => [1, 2]})
+    DB.insert(@table, %{"a" => [1, 2, 3]})
+    DB.insert(@table, %{"b" => 1})
 
-    try do
-      fun.()
-    after
-      if old,
-        do: Application.put_env(:bacon_net, :db_path, old),
-        else: Application.delete_env(:bacon_net, :db_path)
-    end
+    assert DB.search(@table, %{"a" => %{"x" => 1}}) == [%{"a" => %{"x" => 1}}]
+    assert DB.search(@table, %{"a" => [1, 2]}) == [%{"a" => [1, 2]}]
+    assert length(DB.search(@table, %{"a" => nil})) == 1
   end
 end

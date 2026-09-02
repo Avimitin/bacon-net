@@ -3,15 +3,17 @@ defmodule Mix.Tasks.Import.IidxAutomap do
   Import IIDX scores from a spice automap XML dump
   (utils/db/import_iidx_spice_automap.py counterpart).
 
-      mix import.iidx_automap --automap_xml automap.xml --version 30 \
-        --monkey_db db.json --iidx_id 12345678
+      mix import.iidx_automap --automap_xml automap.xml --version 30 --iidx_id 12345678
+
+  Scores are written to the PostgreSQL database; import the profile first
+  with `mix bacon_net.import_json`.
   """
 
   use Mix.Task
 
   alias BaconNet.{DB, Kbinxml, XNode, CP932}
 
-  @shortdoc "Import IIDX automap scores into db.json"
+  @shortdoc "Import IIDX automap scores into the database"
 
   # ClearFlags enum: NO_PLAY=0 FAILED=1 ASSIST_CLEAR=2 EASY_CLEAR=3 CLEAR=4
   # HARD_CLEAR=5 EX_HARD_CLEAR=6 FULL_COMBO=7 (only the used ones are bound)
@@ -26,23 +28,21 @@ defmodule Mix.Tasks.Import.IidxAutomap do
   def run(args) do
     {opts, _argv, _} =
       OptionParser.parse(args,
-        strict: [automap_xml: :string, version: :integer, monkey_db: :string, iidx_id: :string]
+        strict: [automap_xml: :string, version: :integer, iidx_id: :string]
       )
 
     automap_xml = Keyword.get(opts, :automap_xml) || Mix.raise("--automap_xml is required")
     version = Keyword.get(opts, :version, 30)
-    monkey_db = Keyword.get(opts, :monkey_db) || Mix.raise("--monkey_db is required")
 
     iidx_id =
       (Keyword.get(opts, :iidx_id) || Mix.raise("--iidx_id is required"))
       |> String.replace("-", "")
       |> String.to_integer()
 
-    Application.put_env(:bacon_net, :db_path, monkey_db)
-    {:ok, _} = DB.start_link()
+    Mix.Task.run("app.start")
 
     if DB.get("iidx_profile", %{"iidx_id" => iidx_id}) == nil do
-      Mix.raise("ERROR: IIDX profile #{iidx_id} not in #{monkey_db}")
+      Mix.raise("ERROR: IIDX profile #{iidx_id} not in the database")
     end
 
     game_version = 30
@@ -130,7 +130,7 @@ defmodule Mix.Tasks.Import.IidxAutomap do
     end
 
     IO.puts("")
-    IO.puts("#{total_count} scores imported to IIDX profile #{iidx_id} in #{monkey_db}")
+    IO.puts("#{total_count} scores imported to IIDX profile #{iidx_id}")
   end
 
   defp parse_scores(automap_xml, version) do

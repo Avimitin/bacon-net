@@ -1,333 +1,237 @@
 defmodule BaconNet.DB do
   @moduledoc """
-  TinyDB-compatible JSON document store (core_database.py counterpart).
+  TinyDB-compatible document store backed by PostgreSQL.
 
-  Data lives in a `db.json` file in the working directory with the same
-  layout TinyDB uses: `%{"table" => %{"1" => doc, "2" => doc}}`. Every
-  mutation rewrites the file, mirroring TinyDB's write-through behaviour.
-
+  Documents live in the `documents` table as JSONB keyed by
+  `{table_name, doc_id}`; `seq` preserves TinyDB's insertion ordering.
   All query conditions are maps of field => value; a document matches when
-  every listed field equals the given value (TinyDB's `&`-of-`==` pattern).
-  Documents are plain maps with string keys.
+  every listed field equals the given value, translated to per-field JSONB
+  equality (`data -> field = value`) so semantics match an in-memory map
+  exactly, including nested values and arrays.
+
+  Mutations take a per-table PostgreSQL advisory transaction lock, so id
+  assignment and check-and-insert are race-free without serializing
+  unrelated tables through one process. A function passed to
+  `transaction/1` runs all enclosed operations in one database
+  transaction: either everything commits or nothing is visible.
+
+  The database is the acknowledgement boundary: if a write cannot be
+  committed the caller gets an error, never a false success.
   """
 
-  use GenServer
+  import Ecto.Query
 
-  require Logger
-
-  ## Client API
-
-  def start_link(opts \\ []) do
-    GenServer.start_link(__MODULE__, opts, name: __MODULE__)
-  end
+  alias BaconNet.DB.Document
+  alias BaconNet.Repo
 
   @doc "First document in `table` matching all conditions, or nil."
-  def get(table, conds) when is_map(conds), do: GenServer.call(__MODULE__, {:get, table, conds})
+  def get(table, conds) when is_map(conds) do
+    table |> matching(conds) |> limit(1) |> select([d], d.data) |> Repo.one()
+  end
 
   @doc "All documents in `table` matching all conditions."
-  def search(table, conds) when is_map(conds),
-    do: GenServer.call(__MODULE__, {:search, table, conds})
+  def search(table, conds) when is_map(conds) do
+    table |> matching(conds) |> select([d], d.data) |> Repo.all()
+  end
 
   @doc "All documents in `table`."
-  def all(table), do: GenServer.call(__MODULE__, {:all, table})
+  def all(table), do: search(table, %{})
 
   @doc "All documents in `table` matching all conditions, as {doc_id, doc} pairs."
-  def search_with_ids(table, conds) when is_map(conds),
-    do: GenServer.call(__MODULE__, {:search_with_ids, table, conds})
+  def search_with_ids(table, conds) when is_map(conds) do
+    table |> matching(conds) |> select([d], {d.doc_id, d.data}) |> Repo.all()
+  end
 
   @doc "All documents in `table`, as {doc_id, doc} pairs."
-  def all_with_ids(table), do: GenServer.call(__MODULE__, {:all_with_ids, table})
+  def all_with_ids(table), do: search_with_ids(table, %{})
 
   @doc "Document in `table` with the given doc id, or nil."
-  def get_by_id(table, id), do: GenServer.call(__MODULE__, {:get_by_id, table, id})
+  def get_by_id(table, id) do
+    Repo.one(
+      from(d in Document,
+        where: d.table_name == ^table and d.doc_id == ^to_string(id),
+        select: d.data
+      )
+    )
+  end
 
   @doc "Insert a document. Returns {doc_id, doc}."
-  def insert_with_id(table, doc) when is_map(doc),
-    do: GenServer.call(__MODULE__, {:insert_with_id, table, doc})
+  def insert_with_id(table, doc) when is_map(doc) do
+    with_table_lock(table, fn ->
+      id = Integer.to_string(next_id(table))
+      insert_row!(table, id, doc)
+      {id, doc}
+    end)
+  end
 
   @doc "Replace the document with the given doc id entirely. Returns :ok or :not_found."
-  def replace_by_id(table, id, doc) when is_map(doc),
-    do: GenServer.call(__MODULE__, {:replace_by_id, table, id, doc})
+  def replace_by_id(table, id, doc) when is_map(doc) do
+    {count, _} =
+      table
+      |> by_id(id)
+      |> Repo.update_all(set: [data: doc])
+
+    if count == 0, do: :not_found, else: :ok
+  end
 
   @doc "Merge `fields` into the document with the given doc id. Returns :ok or :not_found."
-  def update_by_id(table, id, fields) when is_map(fields),
-    do: GenServer.call(__MODULE__, {:update_by_id, table, id, fields})
+  def update_by_id(table, id, fields) when is_map(fields) do
+    {count, _} =
+      table
+      |> by_id(id)
+      |> merge_update(fields)
+      |> Repo.update_all([])
+
+    if count == 0, do: :not_found, else: :ok
+  end
 
   @doc "Remove the document with the given doc id. Returns :ok or :not_found."
-  def remove_by_id(table, id), do: GenServer.call(__MODULE__, {:remove_by_id, table, id})
+  def remove_by_id(table, id) do
+    {count, _} = table |> by_id(id) |> Repo.delete_all()
+    if count == 0, do: :not_found, else: :ok
+  end
 
   @doc "All table names with their document counts, sorted by name."
-  def tables, do: GenServer.call(__MODULE__, :tables)
+  def tables do
+    Repo.all(from(d in Document, group_by: d.table_name, select: {d.table_name, count()}))
+    |> Enum.sort()
+  end
 
   @doc "Drop an entire table."
-  def drop_table(table), do: GenServer.call(__MODULE__, {:drop_table, table})
+  def drop_table(table) do
+    Repo.delete_all(from(d in Document, where: d.table_name == ^table))
+    :ok
+  end
 
   @doc "Insert a document. Returns the document."
-  def insert(table, doc) when is_map(doc), do: GenServer.call(__MODULE__, {:insert, table, doc})
+  def insert(table, doc) when is_map(doc) do
+    {_id, doc} = insert_with_id(table, doc)
+    doc
+  end
 
   @doc "Merge `fields` into every document of `table` matching `conds`."
-  def update(table, fields, conds) when is_map(fields) and is_map(conds),
-    do: GenServer.call(__MODULE__, {:update, table, fields, conds})
+  def update(table, fields, conds) when is_map(fields) and is_map(conds) do
+    table
+    |> matching(conds)
+    |> exclude(:order_by)
+    |> merge_update(fields)
+    |> Repo.update_all([])
+
+    :ok
+  end
 
   @doc "Merge `doc` into every document matching `conds`; insert `doc` when none match."
-  def upsert(table, doc, conds) when is_map(doc) and is_map(conds),
-    do: GenServer.call(__MODULE__, {:upsert, table, doc, conds})
+  def upsert(table, doc, conds) when is_map(doc) and is_map(conds) do
+    with_table_lock(table, fn ->
+      if Repo.exists?(matching(table, conds)) do
+        table |> matching(conds) |> exclude(:order_by) |> merge_update(doc) |> Repo.update_all([])
+        :ok
+      else
+        id = Integer.to_string(next_id(table))
+        insert_row!(table, id, doc)
+        doc
+      end
+    end)
+  end
 
   @doc "Remove every document of `table` matching `conds`."
-  def remove(table, conds) when is_map(conds),
-    do: GenServer.call(__MODULE__, {:remove, table, conds})
+  def remove(table, conds) when is_map(conds) do
+    table |> matching(conds) |> exclude(:order_by) |> Repo.delete_all()
+    :ok
+  end
 
   @doc """
   Insert `doc` unless a document matching `conds` already exists, as a single
   atomic check-and-insert. Returns :inserted or :exists.
   """
-  def insert_unless_exists(table, doc, conds) when is_map(doc) and is_map(conds),
-    do: GenServer.call(__MODULE__, {:insert_unless_exists, table, doc, conds})
-
-  @doc "Path of the backing JSON file."
-  def path do
-    Application.get_env(:bacon_net, :db_path, "db.json")
-  end
-
-  ## Server
-
-  @impl true
-  def init(_opts) do
-    data =
-      case File.read(path()) do
-        {:ok, json} ->
-          case Jason.decode(json) do
-            {:ok, data} when is_map(data) ->
-              data
-
-            _ ->
-              raise "failed to load database from #{path()}: malformed JSON"
-          end
-
-        {:error, :enoent} ->
-          %{}
-
-        {:error, reason} ->
-          raise "failed to read database file #{path()}: #{:file.format_error(reason)}"
+  def insert_unless_exists(table, doc, conds) when is_map(doc) and is_map(conds) do
+    with_table_lock(table, fn ->
+      if Repo.exists?(matching(table, conds)) do
+        :exists
+      else
+        id = Integer.to_string(next_id(table))
+        insert_row!(table, id, doc)
+        :inserted
       end
-
-    {:ok, data}
+    end)
   end
 
-  @impl true
-  def handle_call({:get, table, conds}, _from, data) do
-    result =
-      data
-      |> Map.get(table, %{})
-      |> sorted_docs()
-      |> Enum.find(&matches?(&1, conds))
+  @doc """
+  Run `fun` inside one database transaction. All enclosed DB operations
+  commit together; if `fun` raises or the transaction rolls back, nothing
+  is visible. Returns `{:ok, result}` or `{:error, reason}`.
+  """
+  def transaction(fun), do: Repo.transaction(fun)
 
-    {:reply, result, data}
-  end
-
-  def handle_call({:search, table, conds}, _from, data) do
-    result =
-      data
-      |> Map.get(table, %{})
-      |> sorted_docs()
-      |> Enum.filter(&matches?(&1, conds))
-
-    {:reply, result, data}
-  end
-
-  def handle_call({:all, table}, _from, data) do
-    {:reply, data |> Map.get(table, %{}) |> sorted_docs(), data}
-  end
-
-  def handle_call({:search_with_ids, table, conds}, _from, data) do
-    result =
-      data
-      |> Map.get(table, %{})
-      |> sorted_pairs()
-      |> Enum.filter(fn {_id, d} -> matches?(d, conds) end)
-
-    {:reply, result, data}
-  end
-
-  def handle_call({:all_with_ids, table}, _from, data) do
-    {:reply, data |> Map.get(table, %{}) |> sorted_pairs(), data}
-  end
-
-  def handle_call({:get_by_id, table, id}, _from, data) do
-    {:reply, get_in(data, [table, id]), data}
-  end
-
-  def handle_call({:insert_with_id, table, doc}, _from, data) do
-    docs = Map.get(data, table, %{})
-    id = next_id(docs)
-    data = put_in(data, [Access.key(table, %{}), Integer.to_string(id)], doc)
-    persist(data)
-    {:reply, {Integer.to_string(id), doc}, data}
-  end
-
-  def handle_call({:replace_by_id, table, id, doc}, _from, data) do
-    if get_in(data, [table, id]) do
-      data = put_in(data, [table, id], doc)
-      persist(data)
-      {:reply, :ok, data}
-    else
-      {:reply, :not_found, data}
-    end
-  end
-
-  def handle_call({:update_by_id, table, id, fields}, _from, data) do
-    case get_in(data, [table, id]) do
-      nil ->
-        {:reply, :not_found, data}
-
-      existing ->
-        data = put_in(data, [table, id], Map.merge(existing, fields))
-        persist(data)
-        {:reply, :ok, data}
-    end
-  end
-
-  def handle_call({:remove_by_id, table, id}, _from, data) do
-    if get_in(data, [table, id]) do
-      data = update_in(data, [table], &Map.delete(&1, id))
-      persist(data)
-      {:reply, :ok, data}
-    else
-      {:reply, :not_found, data}
-    end
-  end
-
-  def handle_call(:tables, _from, data) do
-    tables =
-      data
-      |> Enum.map(fn {table, docs} -> {table, map_size(docs)} end)
-      |> Enum.sort()
-
-    {:reply, tables, data}
-  end
-
-  def handle_call({:drop_table, table}, _from, data) do
-    data = Map.delete(data, table)
-    persist(data)
-    {:reply, :ok, data}
-  end
-
-  def handle_call({:insert, table, doc}, _from, data) do
-    docs = Map.get(data, table, %{})
-    id = next_id(docs)
-    data = put_in(data, [Access.key(table, %{}), Integer.to_string(id)], doc)
-    persist(data)
-    {:reply, doc, data}
-  end
-
-  def handle_call({:update, table, fields, conds}, _from, data) do
-    docs = Map.get(data, table, %{})
-
-    docs =
-      Map.new(docs, fn {id, doc} ->
-        if matches?(doc, conds), do: {id, Map.merge(doc, fields)}, else: {id, doc}
-      end)
-
-    data = Map.put(data, table, docs)
-    persist(data)
-    {:reply, :ok, data}
-  end
-
-  def handle_call({:upsert, table, doc, conds}, _from, data) do
-    docs = Map.get(data, table, %{})
-
-    if Enum.any?(docs, fn {_id, d} -> matches?(d, conds) end) do
-      docs =
-        Map.new(docs, fn {id, d} ->
-          if matches?(d, conds), do: {id, Map.merge(d, doc)}, else: {id, d}
-        end)
-
-      data = Map.put(data, table, docs)
-      persist(data)
-      {:reply, :ok, data}
-    else
-      id = next_id(docs)
-      data = put_in(data, [Access.key(table, %{}), Integer.to_string(id)], doc)
-      persist(data)
-      {:reply, doc, data}
-    end
-  end
-
-  def handle_call({:remove, table, conds}, _from, data) do
-    docs =
-      data
-      |> Map.get(table, %{})
-      |> Enum.reject(fn {_id, d} -> matches?(d, conds) end)
-      |> Map.new()
-
-    data = Map.put(data, table, docs)
-    persist(data)
-    {:reply, :ok, data}
-  end
-
-  def handle_call({:insert_unless_exists, table, doc, conds}, _from, data) do
-    docs = Map.get(data, table, %{})
-
-    if Enum.any?(docs, fn {_id, d} -> matches?(d, conds) end) do
-      {:reply, :exists, data}
-    else
-      id = next_id(docs)
-      data = put_in(data, [Access.key(table, %{}), Integer.to_string(id)], doc)
-      persist(data)
-      {:reply, :inserted, data}
-    end
-  end
+  @doc "Roll back the enclosing `transaction/1` with `reason`."
+  def rollback(reason), do: Repo.rollback(reason)
 
   ## Internals
 
-  # TinyDB iterates documents in insertion order, which matches ascending
-  # numeric document ids.
-  defp sorted_pairs(docs) do
-    Enum.sort_by(docs, fn {id, _doc} ->
-      case Integer.parse(id) do
-        {n, _} -> n
-        :error -> 0
-      end
+  defp by_id(table, id) do
+    from(d in Document, where: d.table_name == ^table and d.doc_id == ^to_string(id))
+  end
+
+  defp merge_update(query, fields) do
+    from(d in query,
+      update: [set: [data: fragment("? || ?::text::jsonb", d.data, ^Jason.encode!(fields))]]
+    )
+  end
+
+  # Per-key exact JSONB equality matches Elixir map semantics: object key
+  # order is irrelevant on both sides, arrays compare in order, and a
+  # nested map must be equal rather than merely contained (unlike @>).
+  # A nil condition value matches documents where the key is absent or null.
+  defp matching(table, conds) do
+    Enum.reduce(conds, from(d in base(table), order_by: [asc: d.seq]), fn
+      {key, nil}, query ->
+        from(d in query,
+          where:
+            fragment(
+              "NOT jsonb_exists(?, ?) OR ?->? = 'null'::jsonb",
+              d.data,
+              ^key,
+              d.data,
+              ^key
+            )
+        )
+
+      {key, value}, query ->
+        from(d in query,
+          where: fragment("?->? = ?::text::jsonb", d.data, ^key, ^Jason.encode!(value))
+        )
     end)
   end
 
-  defp sorted_docs(docs) do
-    docs
-    |> sorted_pairs()
-    |> Enum.map(fn {_id, doc} -> doc end)
+  defp base(table), do: from(d in Document, where: d.table_name == ^table)
+
+  defp next_id(table) do
+    %{rows: [[id]]} =
+      Repo.query!(
+        """
+        SELECT COALESCE(MAX(d.doc_id::bigint), 0) + 1
+        FROM documents d
+        WHERE d.table_name = $1 AND d.doc_id ~ '^[0-9]{1,18}$'
+        """,
+        [table]
+      )
+
+    id
   end
 
-  defp matches?(doc, conds) do
-    Enum.all?(conds, fn {k, v} -> Map.get(doc, k) == v end)
+  defp insert_row!(table, id, doc) do
+    Repo.insert!(%Document{table_name: table, doc_id: id, data: doc})
   end
 
-  defp next_id(docs) do
-    docs
-    |> Map.keys()
-    |> Enum.map(fn k ->
-      case Integer.parse(k) do
-        {n, _} -> n
-        :error -> 0
-      end
-    end)
-    |> Enum.max(fn -> 0 end)
-    |> Kernel.+(1)
-  end
+  # Serializes writers of one table for the duration of the surrounding
+  # transaction, so id assignment and check-and-insert cannot interleave.
+  defp with_table_lock(table, fun) do
+    {:ok, result} =
+      Repo.transaction(fn ->
+        Repo.query!("SELECT pg_advisory_xact_lock(hashtextextended($1, 0))", [table])
+        fun.()
+      end)
 
-  # Write-then-rename so a crash mid-write never leaves a truncated file;
-  # a failed write raises so callers get an error instead of a false success
-  # and the supervisor restarts us onto the last good file.
-  defp persist(data) do
-    target = path()
-    tmp = target <> ".tmp"
-
-    with :ok <- File.write(tmp, Jason.encode!(data, pretty: true)),
-         :ok <- File.rename(tmp, target) do
-      :ok
-    else
-      {:error, reason} ->
-        Logger.error("failed to persist database to #{target}: #{:file.format_error(reason)}")
-        raise "failed to persist database to #{target}: #{:file.format_error(reason)}"
-    end
+    result
   end
 end
