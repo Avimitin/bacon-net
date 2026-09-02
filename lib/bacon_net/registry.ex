@@ -106,7 +106,9 @@ defmodule BaconNet.Registry do
     BaconNet.Modules.Nostalgia.Op3Common,
     BaconNet.Modules.Nostalgia.Op3Player,
     # management API (webui)
-    BaconNet.Modules.Manage
+    BaconNet.Modules.Manage,
+    # player accounts (webui)
+    BaconNet.Modules.Account
   ]
 
   @routes (for module <- @modules,
