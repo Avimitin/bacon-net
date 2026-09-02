@@ -1,7 +1,7 @@
 defmodule BaconNet.Modules.Sdvx.Game do
   @moduledoc "Port of modules/sdvx/game.py."
 
-  alias BaconNet.{CP932, Core, DB, E, Kbinxml, XNode}
+  alias BaconNet.{CP932, Core, DB, E, Kbinxml, Scores, XNode}
 
   def routes do
     %{
@@ -671,7 +671,7 @@ defmodule BaconNet.Modules.Sdvx.Game do
     retry_cnt = track |> XNode.child("retry_cnt") |> text() |> int()
     judge = track |> XNode.child("judge") |> XNode.text_ints()
 
-    DB.insert("sdvx_scores", %{
+    attempt_doc = %{
       "timestamp" => timestamp,
       "game_version" => game_version,
       "sdvx_id" => djid,
@@ -699,20 +699,101 @@ defmodule BaconNet.Modules.Sdvx.Game do
       "challenge_type" => challenge_type,
       "retry_cnt" => retry_cnt,
       "judge" => judge
-    })
+    }
 
-    best =
-      DB.get("sdvx_scores_best", %{
-        "sdvx_id" => djid,
-        "game_version" => game_version,
-        "music_id" => music_id,
-        "music_type" => music_type
-      }) || %{}
+    # The best key includes the game version, carried in play_style.
+    case Scores.record_attempt(%{
+           game: "sdvx",
+           version: game_version,
+           player: to_string(djid),
+           song: music_id,
+           chart: music_type,
+           play_style: to_string(game_version),
+           score: score,
+           clear: clear_type,
+           miss: nil,
+           payload: %{
+             "exscore" => exscore,
+             "score_grade" => score_grade,
+             "btn_rate" => btn_rate,
+             "long_rate" => long_rate,
+             "vol_rate" => vol_rate,
+             "game_version" => game_version,
+             "name" => profile["name"]
+           },
+           attempt: attempt_doc,
+           stats: %{clear: clear_type >= 2, fc: clear_type >= 4},
+           merge: Scores.Merge.spec("sdvx"),
+           idempotency: %{
+             key: Scores.derive_key("sdvx", "#{info.module}.#{info.method}", djid, info.text),
+             scope: "#{info.module}.#{info.method}",
+             payload_hash: Scores.hash_payload(info.text)
+           },
+           dual_write: fn _recorded ->
+             dual_write_save_m(
+               attempt_doc,
+               game_version,
+               djid,
+               profile["name"],
+               music_id,
+               music_type,
+               score,
+               exscore,
+               clear_type,
+               score_grade,
+               btn_rate,
+               long_rate,
+               vol_rate
+             )
+           end
+         }) do
+      {:ok, _recorded} ->
+        response =
+          E.e(
+            "response",
+            E.e("game")
+          )
+
+        Core.send_response(conn, info, response)
+
+      {:error, _reason} ->
+        Core.reject_request(conn, info)
+    end
+  end
+
+  # Project the recorded play into the legacy document tables, in the same
+  # transaction. sdvx api/game read paths still use those; the relational
+  # best_scores row lock serializes writers per player+chart.
+  defp dual_write_save_m(
+         attempt_doc,
+         game_version,
+         djid,
+         name,
+         music_id,
+         music_type,
+         score,
+         exscore,
+         clear_type,
+         score_grade,
+         btn_rate,
+         long_rate,
+         vol_rate
+       ) do
+    DB.insert("sdvx_scores", attempt_doc)
+
+    best_conds = %{
+      "sdvx_id" => djid,
+      "game_version" => game_version,
+      "music_id" => music_id,
+      "music_type" => music_type
+    }
+
+    best = DB.get("sdvx_scores_best", best_conds) || %{}
 
     best_score_data = %{
       "game_version" => game_version,
       "sdvx_id" => djid,
-      "name" => profile["name"],
+      "name" => name,
       "music_id" => music_id,
       "music_type" => music_type,
       "score" => max(score, Map.get(best, "score", score)),
@@ -724,20 +805,7 @@ defmodule BaconNet.Modules.Sdvx.Game do
       "vol_rate" => max(vol_rate, Map.get(best, "vol_rate", vol_rate))
     }
 
-    DB.upsert("sdvx_scores_best", best_score_data, %{
-      "sdvx_id" => djid,
-      "game_version" => game_version,
-      "music_id" => music_id,
-      "music_type" => music_type
-    })
-
-    response =
-      E.e(
-        "response",
-        E.e("game")
-      )
-
-    Core.send_response(conn, info, response)
+    DB.upsert("sdvx_scores_best", best_score_data, best_conds)
   end
 
   def game_sv_hiscore(conn, _ver) do

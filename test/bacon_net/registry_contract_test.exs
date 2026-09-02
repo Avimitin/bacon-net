@@ -18,6 +18,8 @@ defmodule BaconNet.RegistryContractTest do
     test "every protocol route has an exported handler with the right arity" do
       bad =
         Enum.reject(Registry.routes(), fn r ->
+          Code.ensure_loaded!(r.module)
+
           String.starts_with?(r.prefix, "/") and
             function_exported?(r.module, r.fun, if(r.versioned, do: 2, else: 1))
         end)
@@ -37,6 +39,8 @@ defmodule BaconNet.RegistryContractTest do
         end)
 
       assert Enum.all?(api_routes, fn {module, http_method, segments, fun} ->
+               Code.ensure_loaded!(module)
+
                http_method in [:get, :post, :put, :patch, :delete] and is_list(segments) and
                  function_exported?(module, fun, 2)
              end)

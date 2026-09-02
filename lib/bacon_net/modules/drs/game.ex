@@ -1,7 +1,7 @@
 defmodule BaconNet.Modules.Drs.Game do
   @moduledoc "Port of modules/drs/game.py."
 
-  alias BaconNet.{Core, DB, E, Kbinxml, XNode}
+  alias BaconNet.{Core, DB, E, Kbinxml, Scores, XNode}
 
   def routes do
     %{
@@ -394,7 +394,7 @@ defmodule BaconNet.Modules.Drs.Game do
     good = root |> XNode.child("member") |> XNode.child("good") |> text() |> int()
     bad = root |> XNode.child("member") |> XNode.child("bad") |> text() |> int()
 
-    DB.insert("drs_scores", %{
+    attempt_doc = %{
       "timestamp" => timestamp,
       "game_version" => game_version,
       "drs_id" => djid,
@@ -409,20 +409,88 @@ defmodule BaconNet.Modules.Drs.Game do
       "great" => great,
       "good" => good,
       "bad" => bad
-    })
+    }
 
-    best =
-      DB.get("drs_scores_best", %{
-        "drs_id" => djid,
-        "game_version" => game_version,
-        "music_id" => music_id,
-        "music_type" => music_type
-      }) || %{}
+    # The best key includes the game version and music_type (a string);
+    # play_style carries both.
+    case Scores.record_attempt(%{
+           game: "drs",
+           version: game_version,
+           player: to_string(djid),
+           song: music_id,
+           chart: 0,
+           play_style: "#{game_version}:#{music_type}",
+           score: score,
+           clear: 0,
+           miss: nil,
+           payload: %{
+             "rank" => rank,
+             "combo" => combo,
+             "param" => param,
+             "game_version" => game_version,
+             "name" => profile["name"]
+           },
+           attempt: attempt_doc,
+           stats: %{clear: false, fc: false},
+           merge: Scores.Merge.spec("drs"),
+           idempotency: %{
+             key: Scores.derive_key("drs", "#{info.module}.#{info.method}", djid, info.text),
+             scope: "#{info.module}.#{info.method}",
+             payload_hash: Scores.hash_payload(info.text)
+           },
+           dual_write: fn _recorded ->
+             dual_write_musicscore(
+               attempt_doc,
+               game_version,
+               djid,
+               profile["name"],
+               music_id,
+               music_type,
+               score,
+               rank,
+               combo,
+               param
+             )
+           end
+         }) do
+      {:ok, _recorded} ->
+        Core.send_response(conn, info, E.e("response", E.e("game")))
+
+      {:error, _reason} ->
+        Core.reject_request(conn, info)
+    end
+  end
+
+  # Project the recorded play into the legacy document tables, in the same
+  # transaction. drs game read paths still use those; the relational
+  # best_scores row lock serializes writers per player+chart.
+  defp dual_write_musicscore(
+         attempt_doc,
+         game_version,
+         djid,
+         name,
+         music_id,
+         music_type,
+         score,
+         rank,
+         combo,
+         param
+       ) do
+    DB.insert("drs_scores", attempt_doc)
+
+    best_conds = %{
+      "drs_id" => djid,
+      "game_version" => game_version,
+      "music_id" => music_id,
+      "music_type" => music_type
+    }
+
+    best = DB.get("drs_scores_best", best_conds) || %{}
 
     best_score_data = %{
       "game_version" => game_version,
       "drs_id" => djid,
-      "name" => profile["name"],
+      "name" => name,
       "music_id" => music_id,
       "music_type" => music_type,
       "score" => max(score, Map.get(best, "score", score)),
@@ -431,16 +499,7 @@ defmodule BaconNet.Modules.Drs.Game do
       "param" => param
     }
 
-    DB.upsert("drs_scores_best", best_score_data, %{
-      "drs_id" => djid,
-      "game_version" => game_version,
-      "music_id" => music_id,
-      "music_type" => music_type
-    })
-
-    response = E.e("response", E.e("game"))
-
-    Core.send_response(conn, info, response)
+    DB.upsert("drs_scores_best", best_score_data, best_conds)
   end
 
   def drs_save_playdata(conn) do

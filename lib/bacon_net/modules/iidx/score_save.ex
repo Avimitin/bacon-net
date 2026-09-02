@@ -101,9 +101,11 @@ defmodule BaconNet.Modules.Iidx.ScoreSave do
   end
 
   defp idempotency(info, iidx_id) do
+    scope = "#{info.module}.#{info.method}"
+
     %{
-      key: Scores.derive_key("iidx", info.method, iidx_id, info.text),
-      scope: "#{info.module}.#{info.method}",
+      key: Scores.derive_key("iidx", scope, iidx_id, info.text),
+      scope: scope,
       payload_hash: Scores.hash_payload(info.text)
     }
   end

@@ -1,7 +1,7 @@
 defmodule BaconNet.Modules.Ddr.Playerdata2 do
   @moduledoc "Port of modules/ddr/playerdata_2.py (DDR A3, game version 20)."
 
-  alias BaconNet.{Core, DB, E, XNode}
+  alias BaconNet.{Core, DB, E, Scores, XNode}
 
   def routes do
     %{
@@ -241,153 +241,203 @@ defmodule BaconNet.Modules.Ddr.Playerdata2 do
 
           note = XNode.children(data, "note")
 
-          if find_int(data, "isgameover") == 0 do
-            # Python quirk: the loop body only assigns variables, so the insert
-            # below uses the values from the LAST note with stagenum != 0
-            # (NameError when no such note exists).
-            last =
-              Enum.reduce(note, nil, fn n, acc ->
-                if find_int(n, "stagenum") != 0, do: extract_note(n), else: acc
-              end)
+          save_ok =
+            if find_int(data, "isgameover") == 0 do
+              # Python quirk: the loop body only assigns variables, so the insert
+              # below uses the values from the LAST note with stagenum != 0
+              # (NameError when no such note exists).
+              last =
+                Enum.reduce(note, nil, fn n, acc ->
+                  if find_int(n, "stagenum") != 0, do: extract_note(n), else: acc
+                end)
 
-            n = last || raise("name 'mcode' is not defined")
+              n = last || raise("name 'mcode' is not defined")
 
-            DB.insert("ddr_scores", %{
-              "timestamp" => timestamp,
-              "pcbid" => pcbid,
-              "shoparea" => shoparea,
-              "game_version" => game_version,
-              "ddr_id" => ddr_id,
-              "playstyle" => playstyle,
-              "mcode" => n.mcode,
-              "difficulty" => n.difficulty,
-              "rank" => n.rank,
-              "lamp" => n.lamp,
-              "score" => n.score,
-              "exscore" => n.exscore,
-              "maxcombo" => n.maxcombo,
-              "life" => n.life,
-              "fastcount" => n.fastcount,
-              "slowcount" => n.slowcount,
-              "judge_marvelous" => n.judge_marvelous,
-              "judge_perfect" => n.judge_perfect,
-              "judge_great" => n.judge_great,
-              "judge_good" => n.judge_good,
-              "judge_boo" => n.judge_boo,
-              "judge_miss" => n.judge_miss,
-              "judge_ok" => n.judge_ok,
-              "judge_ng" => n.judge_ng,
-              "calorie" => n.calorie,
-              "ghostsize" => n.ghostsize,
-              "ghost" => n.ghost,
-              "opt_speed" => n.opt_speed,
-              "opt_boost" => n.opt_boost,
-              "opt_appearance" => n.opt_appearance,
-              "opt_turn" => n.opt_turn,
-              "opt_dark" => n.opt_dark,
-              "opt_scroll" => n.opt_scroll,
-              "opt_arrowcolor" => n.opt_arrowcolor,
-              "opt_cut" => n.opt_cut,
-              "opt_freeze" => n.opt_freeze,
-              "opt_jump" => n.opt_jump,
-              "opt_arrowshape" => n.opt_arrowshape,
-              "opt_filter" => n.opt_filter,
-              "opt_guideline" => n.opt_guideline,
-              "opt_gauge" => n.opt_gauge,
-              "opt_judgepriority" => n.opt_judgepriority,
-              "opt_timing" => n.opt_timing
-            })
+              attempt_doc = %{
+                "timestamp" => timestamp,
+                "pcbid" => pcbid,
+                "shoparea" => shoparea,
+                "game_version" => game_version,
+                "ddr_id" => ddr_id,
+                "playstyle" => playstyle,
+                "mcode" => n.mcode,
+                "difficulty" => n.difficulty,
+                "rank" => n.rank,
+                "lamp" => n.lamp,
+                "score" => n.score,
+                "exscore" => n.exscore,
+                "maxcombo" => n.maxcombo,
+                "life" => n.life,
+                "fastcount" => n.fastcount,
+                "slowcount" => n.slowcount,
+                "judge_marvelous" => n.judge_marvelous,
+                "judge_perfect" => n.judge_perfect,
+                "judge_great" => n.judge_great,
+                "judge_good" => n.judge_good,
+                "judge_boo" => n.judge_boo,
+                "judge_miss" => n.judge_miss,
+                "judge_ok" => n.judge_ok,
+                "judge_ng" => n.judge_ng,
+                "calorie" => n.calorie,
+                "ghostsize" => n.ghostsize,
+                "ghost" => n.ghost,
+                "opt_speed" => n.opt_speed,
+                "opt_boost" => n.opt_boost,
+                "opt_appearance" => n.opt_appearance,
+                "opt_turn" => n.opt_turn,
+                "opt_dark" => n.opt_dark,
+                "opt_scroll" => n.opt_scroll,
+                "opt_arrowcolor" => n.opt_arrowcolor,
+                "opt_cut" => n.opt_cut,
+                "opt_freeze" => n.opt_freeze,
+                "opt_jump" => n.opt_jump,
+                "opt_arrowshape" => n.opt_arrowshape,
+                "opt_filter" => n.opt_filter,
+                "opt_guideline" => n.opt_guideline,
+                "opt_gauge" => n.opt_gauge,
+                "opt_judgepriority" => n.opt_judgepriority,
+                "opt_timing" => n.opt_timing
+              }
 
-            save_best(game_version, ddr_id, playstyle, n.mcode, n.difficulty, %{
-              rank: n.rank,
-              lamp: n.lamp,
-              score: n.score,
-              exscore: n.exscore
-            })
-          else
-            profile = get_profile(refid)
-            version = Map.fetch!(profile, "version")
-            game_profile = Map.get(version, to_string(game_version), %{})
+              case Scores.record_attempt(%{
+                     game: "ddr",
+                     version: game_version,
+                     player: to_string(ddr_id),
+                     song: n.mcode,
+                     chart: n.difficulty,
+                     play_style: "",
+                     score: n.score,
+                     clear: n.lamp,
+                     miss: nil,
+                     payload: %{
+                       "rank" => n.rank,
+                       "exscore" => n.exscore,
+                       "ghost" => n.ghost,
+                       "ghostsize" => n.ghostsize,
+                       "game_version" => game_version,
+                       "playstyle" => playstyle
+                     },
+                     attempt: attempt_doc,
+                     stats: %{clear: n.lamp >= 2, fc: n.lamp >= 4},
+                     merge: Scores.Merge.spec("ddr_legacy"),
+                     idempotency: %{
+                       key:
+                         Scores.derive_key(
+                           "ddr",
+                           "#{info.module}.#{info.method}",
+                           ddr_id,
+                           info.text
+                         ),
+                       scope: "#{info.module}.#{info.method}",
+                       payload_hash: Scores.hash_payload(info.text)
+                     },
+                     dual_write: fn _recorded ->
+                       DB.insert("ddr_scores", attempt_doc)
 
-            single_grade =
-              data |> XNode.child("grade") |> XNode.child("single_grade") |> text_int()
-
-            double_grade =
-              data |> XNode.child("grade") |> XNode.child("double_grade") |> text_int()
-
-            opt_timing_disp =
-              note
-              |> Enum.reverse()
-              |> Enum.reduce_while(:unset, fn n, _acc ->
-                case XNode.child(n, "opt_timing_disp") do
-                  nil ->
-                    # Python: profile.get here refers to the top-level profile
-                    # document, not the game profile (kept verbatim)
-                    {:halt, Map.get(profile, "opt_timing_disp", -1)}
-
-                  el ->
-                    v = text_int(el)
-                    if v != 0, do: {:halt, v}, else: {:cont, v}
-                end
-              end)
-
-            opt_timing_disp =
-              case opt_timing_disp do
-                # empty note list: Python dies with NameError
-                :unset -> raise "name 'opt_timing_disp' is not defined"
-                v -> v
+                       save_best(game_version, ddr_id, playstyle, n.mcode, n.difficulty, %{
+                         rank: n.rank,
+                         lamp: n.lamp,
+                         score: n.score,
+                         exscore: n.exscore
+                       })
+                     end
+                   }) do
+                {:ok, _recorded} -> true
+                {:error, _reason} -> false
               end
+            else
+              profile = get_profile(refid)
+              version = Map.fetch!(profile, "version")
+              game_profile = Map.get(version, to_string(game_version), %{})
 
-            # workaround to save the correct dan grade by using the course mcode
-            # because omnimix force unlocks all dan courses with <grade __type="u8">1</grade> in coursedb.xml
-            {single_grade, double_grade} =
-              if is_omni do
-                n = List.first(note)
-                mcode = find_int(n, "mcode")
+              single_grade =
+                data |> XNode.child("grade") |> XNode.child("single_grade") |> text_int()
 
-                if find_int(n, "clearkind") != 1 do
-                  Enum.reduce(
-                    Enum.with_index(1000..1010, 1),
-                    {single_grade, double_grade},
-                    fn {course_id, grade}, {sg, dg} ->
-                      cond do
-                        playstyle in [0, 2] and mcode in [course_id, course_id + 11] ->
-                          {grade, dg}
+              double_grade =
+                data |> XNode.child("grade") |> XNode.child("double_grade") |> text_int()
 
-                        playstyle == 1 and mcode in [course_id + 1000, course_id + 1000 + 11] ->
-                          {sg, grade}
+              opt_timing_disp =
+                note
+                |> Enum.reverse()
+                |> Enum.reduce_while(:unset, fn n, _acc ->
+                  case XNode.child(n, "opt_timing_disp") do
+                    nil ->
+                      # Python: profile.get here refers to the top-level profile
+                      # document, not the game profile (kept verbatim)
+                      {:halt, Map.get(profile, "opt_timing_disp", -1)}
 
-                        true ->
-                          {sg, dg}
+                    el ->
+                      v = text_int(el)
+                      if v != 0, do: {:halt, v}, else: {:cont, v}
+                  end
+                end)
+
+              opt_timing_disp =
+                case opt_timing_disp do
+                  # empty note list: Python dies with NameError
+                  :unset -> raise "name 'opt_timing_disp' is not defined"
+                  v -> v
+                end
+
+              # workaround to save the correct dan grade by using the course mcode
+              # because omnimix force unlocks all dan courses with <grade __type="u8">1</grade> in coursedb.xml
+              {single_grade, double_grade} =
+                if is_omni do
+                  n = List.first(note)
+                  mcode = find_int(n, "mcode")
+
+                  if find_int(n, "clearkind") != 1 do
+                    Enum.reduce(
+                      Enum.with_index(1000..1010, 1),
+                      {single_grade, double_grade},
+                      fn {course_id, grade}, {sg, dg} ->
+                        cond do
+                          playstyle in [0, 2] and mcode in [course_id, course_id + 11] ->
+                            {grade, dg}
+
+                          playstyle == 1 and mcode in [course_id + 1000, course_id + 1000 + 11] ->
+                            {sg, grade}
+
+                          true ->
+                            {sg, dg}
+                        end
                       end
-                    end
-                  )
+                    )
+                  else
+                    {single_grade, double_grade}
+                  end
                 else
                   {single_grade, double_grade}
                 end
-              else
-                {single_grade, double_grade}
-              end
 
-            game_profile =
-              game_profile
-              |> Map.put(
-                "single_grade",
-                max(single_grade, Map.get(game_profile, "single_grade", single_grade))
-              )
-              |> Map.put(
-                "double_grade",
-                max(double_grade, Map.get(game_profile, "double_grade", double_grade))
-              )
-              |> Map.put("opt_timing_disp", opt_timing_disp)
+              game_profile =
+                game_profile
+                |> Map.put(
+                  "single_grade",
+                  max(single_grade, Map.get(game_profile, "single_grade", single_grade))
+                )
+                |> Map.put(
+                  "double_grade",
+                  max(double_grade, Map.get(game_profile, "double_grade", double_grade))
+                )
+                |> Map.put("opt_timing_disp", opt_timing_disp)
 
-            profile =
-              Map.put(profile, "version", Map.put(version, to_string(game_version), game_profile))
+              profile =
+                Map.put(
+                  profile,
+                  "version",
+                  Map.put(version, to_string(game_version), game_profile)
+                )
 
-            DB.upsert("ddr_profile", profile, %{"card" => refid})
-          end
+              DB.upsert("ddr_profile", profile, %{"card" => refid})
 
-          E.e("response", E.e("playerdata_2", E.e("result", 0, __type: "s32")))
+              true
+            end
+
+          E.e(
+            "response",
+            E.e("playerdata_2", E.e("result", if(save_ok, do: 0, else: 1), __type: "s32"))
+          )
 
         mode == "rivalload" ->
           loadflag = find_int(data, "loadflag")

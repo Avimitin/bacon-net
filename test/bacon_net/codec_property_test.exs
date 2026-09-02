@@ -11,8 +11,10 @@ defmodule BaconNet.CodecPropertyTest do
   alias BaconNet.{Arc4, Kbinxml, LZ77, XNode}
 
   property "ARC4 crypt is an involution for any key and payload" do
-    check all(key <- binary(min_length: 1, max_length: 64),
-              data <- binary(max_length: 1024)) do
+    check all(
+            key <- binary(min_length: 1, max_length: 64),
+            data <- binary(max_length: 1024)
+          ) do
       assert Arc4.crypt(key, Arc4.crypt(key, data)) == data
     end
   end
@@ -24,8 +26,10 @@ defmodule BaconNet.CodecPropertyTest do
   end
 
   property "LZ77 decode of truncated or corrupt streams fails deterministically" do
-    check all(data <- binary(min_length: 1, max_length: 2048),
-              cut <- integer(0..256)) do
+    check all(
+            data <- binary(min_length: 1, max_length: 2048),
+            cut <- integer(0..256)
+          ) do
       encoded = LZ77.encode(data)
       mangled = binary_part(encoded, 0, min(byte_size(encoded), cut))
 

@@ -302,7 +302,6 @@ defmodule BaconNet.Modules.Iidx.Iidx32music do
          clid,
          score_stats
        ) do
-
     ranklist_scores =
       DB.search("iidx_scores_best", %{
         "play_style" => play_style,

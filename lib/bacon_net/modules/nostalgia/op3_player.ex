@@ -1,7 +1,7 @@
 defmodule BaconNet.Modules.Nostalgia.Op3Player do
   @moduledoc "Port of modules/nostalgia/op3_player.py."
 
-  alias BaconNet.{Core, DB, E, XNode}
+  alias BaconNet.{Core, DB, E, Scores, XNode}
 
   def routes do
     %{
@@ -529,7 +529,7 @@ defmodule BaconNet.Modules.Nostalgia.Op3Player do
 
     best_score = common |> XNode.child("best_score") |> text() |> int()
 
-    DB.insert("nostalgia_scores", %{
+    attempt_doc = %{
       "timestamp" => play_time,
       "game_version" => game_version,
       "nostalgia_id" => nostalgia_id,
@@ -569,14 +569,94 @@ defmodule BaconNet.Modules.Nostalgia.Op3Player do
       "note_success_rate_glissando" => note_success_rate_glissando,
       "note_success_rate_trill" => note_success_rate_trill,
       "best_score" => best_score
-    })
+    }
 
-    best =
-      DB.get("nostalgia_scores_best", %{
-        "nostalgia_id" => nostalgia_id,
-        "music_index" => music_index,
-        "sheet_type" => sheet_type
-      }) || %{}
+    case Scores.record_attempt(%{
+           game: "nostalgia",
+           version: game_version,
+           player: to_string(nostalgia_id),
+           song: music_index,
+           chart: sheet_type,
+           play_style: "",
+           score: score,
+           clear: clear_flag,
+           miss: nil,
+           payload: %{
+             "clear_flag" => clear_flag,
+             "hands_mode" => hands_mode,
+             "grade" => grade,
+             "play_count" => play_count,
+             "clear_count" => clear_count,
+             "multi_count" => multi_count,
+             "game_version" => game_version
+           },
+           attempt: attempt_doc,
+           stats: %{clear: clear_flag > 0, fc: false},
+           merge: Scores.Merge.spec("nostalgia"),
+           idempotency: %{
+             key:
+               Scores.derive_key(
+                 "nostalgia",
+                 "#{info.module}.#{info.method}",
+                 nostalgia_id,
+                 info.text
+               ),
+             scope: "#{info.module}.#{info.method}",
+             payload_hash: Scores.hash_payload(info.text)
+           },
+           dual_write: fn _recorded ->
+             dual_write_stage_result(
+               attempt_doc,
+               game_version,
+               nostalgia_id,
+               music_index,
+               sheet_type,
+               score,
+               play_count,
+               clear_count,
+               multi_count,
+               clear_flag,
+               hands_mode,
+               grade
+             )
+           end
+         }) do
+      {:ok, _recorded} ->
+        response = E.e("response", E.e("set_stage_result", E.e("player")))
+
+        Core.send_response(conn, info, response)
+
+      {:error, _reason} ->
+        Core.reject_request(conn, info)
+    end
+  end
+
+  # Project the recorded play into the legacy document tables, in the same
+  # transaction. nostalgia read paths still use those; the relational
+  # best_scores row lock serializes writers per player+chart.
+  defp dual_write_stage_result(
+         attempt_doc,
+         game_version,
+         nostalgia_id,
+         music_index,
+         sheet_type,
+         score,
+         play_count,
+         clear_count,
+         multi_count,
+         clear_flag,
+         hands_mode,
+         grade
+       ) do
+    DB.insert("nostalgia_scores", attempt_doc)
+
+    best_conds = %{
+      "nostalgia_id" => nostalgia_id,
+      "music_index" => music_index,
+      "sheet_type" => sheet_type
+    }
+
+    best = DB.get("nostalgia_scores_best", best_conds) || %{}
 
     best_score_data = %{
       "game_version" => game_version,
@@ -592,15 +672,7 @@ defmodule BaconNet.Modules.Nostalgia.Op3Player do
       "grade" => max(grade, Map.get(best, "grade", grade))
     }
 
-    DB.upsert("nostalgia_scores_best", best_score_data, %{
-      "nostalgia_id" => nostalgia_id,
-      "music_index" => music_index,
-      "sheet_type" => sheet_type
-    })
-
-    response = E.e("response", E.e("set_stage_result", E.e("player")))
-
-    Core.send_response(conn, info, response)
+    DB.upsert("nostalgia_scores_best", best_score_data, best_conds)
   end
 
   def op3_player_set_total_result(conn) do
