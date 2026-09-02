@@ -1,0 +1,21 @@
+# Elixir build artifacts
+/_build/
+/deps/
+/cover/
+/doc/
+*.beam
+*.ez
+
+# Runtime data
+/db.json
+/webui/
+*.xml
+!/test/fixtures/*.xml
+
+# Nix-managed local env
+/.nix-mix/
+/.nix-hex/
+/.elixir_ls/
+
+# OS noise
+.DS_Store
