@@ -9,6 +9,10 @@ defmodule BaconNet.Router do
 
   plug(:match)
 
+  plug(BaconNet.Plugs.RequestId)
+
+  plug(BaconNet.Plugs.Metrics)
+
   plug(BaconNet.Plugs.CORS)
 
   plug(BaconNet.Plugs.Webui)
@@ -72,6 +76,35 @@ defmodule BaconNet.Router do
     conn
     |> put_resp_header("location", "/webui/")
     |> send_resp(302, "")
+  end
+
+  ## Ops endpoints (no auth: they reveal nothing)
+
+  get "/healthz" do
+    send_resp(conn, 200, "ok\n")
+  end
+
+  get "/readyz" do
+    try do
+      case Config.readiness_check().() do
+        {:ok, _} -> send_resp(conn, 200, "ok\n")
+        _ -> send_resp(conn, 503, "not ready\n")
+      end
+    rescue
+      _ -> send_resp(conn, 503, "not ready\n")
+    end
+  end
+
+  get "/metrics" do
+    case BaconNet.Api.authorize_admin(conn) do
+      :ok ->
+        conn
+        |> put_resp_content_type("text/plain")
+        |> send_resp(200, BaconNet.Telemetry.render())
+
+      :unauthorized ->
+        BaconNet.Api.error(conn, 401, "unauthorized")
+    end
   end
 
   get "/config" do

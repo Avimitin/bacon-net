@@ -7,9 +7,9 @@ defmodule BaconNet.Modules.Manage do
   their id inlined as `_id`.
   """
 
-  import Plug.Conn, only: [send_resp: 3, put_resp_content_type: 2]
+  import Plug.Conn, only: [send_resp: 3, put_resp_content_type: 2, fetch_query_params: 1]
 
-  alias BaconNet.{Api, DB, Shop}
+  alias BaconNet.{Api, Audit, DB, Shop}
 
   @users_table "webui_users"
   @sessions_table "webui_sessions"
@@ -39,7 +39,8 @@ defmodule BaconNet.Modules.Manage do
         {:delete, ["api", "shops", :pcbid], :manage_shop_delete},
         {:get, ["api", "users"], :manage_users},
         {:post, ["api", "users", :username, "ban"], :manage_user_ban},
-        {:post, ["api", "users", :username, "unban"], :manage_user_unban}
+        {:post, ["api", "users", :username, "unban"], :manage_user_unban},
+        {:get, ["api", "audit"], :manage_audit}
       ]
     }
   end
@@ -85,6 +86,7 @@ defmodule BaconNet.Modules.Manage do
     guard_table(conn, table, fn ->
       with {:ok, doc} <- body_object(conn) do
         {id, doc} = DB.insert_with_id(table, doc)
+        audit(conn, "table.insert", "#{table}:#{id}", %{"table" => table})
 
         conn
         |> put_resp_content_type("application/json")
@@ -98,6 +100,7 @@ defmodule BaconNet.Modules.Manage do
   def manage_table_drop(conn, %{"table" => table}) do
     guard_table(conn, table, fn ->
       DB.drop_table(table)
+      audit(conn, "table.drop", table, %{"table" => table})
       send_resp(conn, 204, "")
     end)
   end
@@ -115,6 +118,7 @@ defmodule BaconNet.Modules.Manage do
     guard_table(conn, table, fn ->
       with {:ok, doc} <- body_object(conn),
            :ok <- DB.replace_by_id(table, id, Map.delete(doc, "_id")) do
+        audit(conn, "doc.replace", "#{table}:#{id}", %{"table" => table})
         Api.json(conn, Map.put(doc, "_id", id))
       else
         :error -> bad_request(conn)
@@ -127,6 +131,7 @@ defmodule BaconNet.Modules.Manage do
     guard_table(conn, table, fn ->
       with {:ok, fields} <- body_object(conn),
            :ok <- DB.update_by_id(table, id, Map.delete(fields, "_id")) do
+        audit(conn, "doc.update", "#{table}:#{id}", %{"table" => table})
         Api.json(conn, Map.put(DB.get_by_id(table, id), "_id", id))
       else
         :error -> bad_request(conn)
@@ -138,8 +143,12 @@ defmodule BaconNet.Modules.Manage do
   def manage_doc_delete(conn, %{"table" => table, "id" => id}) do
     guard_table(conn, table, fn ->
       case DB.remove_by_id(table, id) do
-        :ok -> send_resp(conn, 204, "")
-        :not_found -> not_found(conn)
+        :ok ->
+          audit(conn, "doc.delete", "#{table}:#{id}", %{"table" => table})
+          send_resp(conn, 204, "")
+
+        :not_found ->
+          not_found(conn)
       end
     end)
   end
@@ -156,8 +165,10 @@ defmodule BaconNet.Modules.Manage do
     guard(conn, fn ->
       with {:ok, body} <- body_object(conn),
            pcbid when is_binary(pcbid) <- body["pcbid"],
-           nil <- DB.get("shop", %{"pcbid" => pcbid}),
+           nil <- Shop.get_cabinet(pcbid),
            {:ok, doc} <- Shop.permit(pcbid, body["opname"]) do
+        audit(conn, "shop.add", pcbid, %{"opname" => body["opname"]})
+
         conn
         |> put_resp_content_type("application/json")
         |> send_resp(201, Jason.encode!(doc))
@@ -172,9 +183,14 @@ defmodule BaconNet.Modules.Manage do
 
   def manage_shop_permit(conn, %{"pcbid" => pcbid}) do
     guard(conn, fn ->
-      case DB.get("shop", %{"pcbid" => pcbid}) do
-        nil -> not_found(conn)
-        _ -> Api.json(conn, elem(Shop.permit(pcbid), 1))
+      case Shop.get_cabinet(pcbid) do
+        nil ->
+          not_found(conn)
+
+        _ ->
+          {:ok, doc} = Shop.permit(pcbid)
+          audit(conn, "shop.permit", pcbid)
+          Api.json(conn, doc)
       end
     end)
   end
@@ -182,8 +198,12 @@ defmodule BaconNet.Modules.Manage do
   def manage_shop_revoke(conn, %{"pcbid" => pcbid}) do
     guard(conn, fn ->
       case Shop.revoke(pcbid) do
-        :ok -> Api.json(conn, DB.get("shop", %{"pcbid" => pcbid}))
-        :not_found -> not_found(conn)
+        :ok ->
+          audit(conn, "shop.revoke", pcbid)
+          Api.json(conn, Shop.to_doc(Shop.get_cabinet(pcbid)))
+
+        :not_found ->
+          not_found(conn)
       end
     end)
   end
@@ -191,8 +211,12 @@ defmodule BaconNet.Modules.Manage do
   def manage_shop_delete(conn, %{"pcbid" => pcbid}) do
     guard(conn, fn ->
       case Shop.delete(pcbid) do
-        :ok -> send_resp(conn, 204, "")
-        :not_found -> not_found(conn)
+        :ok ->
+          audit(conn, "shop.delete", pcbid)
+          send_resp(conn, 204, "")
+
+        :not_found ->
+          not_found(conn)
       end
     end)
   end
@@ -224,6 +248,37 @@ defmodule BaconNet.Modules.Manage do
     guard(conn, fn -> set_banned(conn, username, false) end)
   end
 
+  ## Audit trail
+
+  def manage_audit(conn, _params) do
+    guard(conn, fn ->
+      conn = fetch_query_params(conn)
+      params = conn.query_params
+      limit = parse_int(params["limit"], 50)
+      cursor = parse_int(params["cursor"], nil)
+
+      {events, next_cursor} = Audit.list(limit: limit, cursor: cursor)
+
+      Api.json(conn, %{
+        "events" => Enum.map(events, &event_json/1),
+        "next_cursor" => next_cursor
+      })
+    end)
+  end
+
+  defp event_json(event) do
+    %{
+      "id" => event.id,
+      "actor" => event.actor,
+      "action" => event.action,
+      "target" => event.target,
+      "outcome" => event.outcome,
+      "request_id" => event.request_id,
+      "metadata" => event.metadata,
+      "created_at" => event.created_at
+    }
+  end
+
   defp set_banned(conn, username, banned) do
     case DB.get(@users_table, %{"username" => username}) do
       nil ->
@@ -236,6 +291,8 @@ defmodule BaconNet.Modules.Manage do
           # kill the user's live sessions immediately
           DB.remove(@sessions_table, %{"username" => username})
         end
+
+        audit(conn, if(banned, do: "user.ban", else: "user.unban"), username)
 
         user = DB.get(@users_table, %{"username" => username})
 
@@ -262,6 +319,26 @@ defmodule BaconNet.Modules.Manage do
     case Api.authorize_admin(conn) do
       :ok -> fun.()
       :unauthorized -> Api.error(conn, 401, "unauthorized")
+    end
+  end
+
+  defp audit(conn, action, target, metadata \\ %{}) do
+    Audit.record(%{
+      actor: "admin",
+      action: action,
+      target: target,
+      outcome: "ok",
+      request_id: conn.assigns[:request_id],
+      metadata: metadata
+    })
+  end
+
+  defp parse_int(nil, default), do: default
+
+  defp parse_int(s, default) when is_binary(s) do
+    case Integer.parse(s) do
+      {n, ""} -> n
+      _ -> default
     end
   end
 

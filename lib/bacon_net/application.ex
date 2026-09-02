@@ -12,6 +12,7 @@ defmodule BaconNet.Application do
     children =
       [
         BaconNet.State,
+        BaconNet.Telemetry,
         BaconNet.Repo
       ] ++
         if Application.get_env(:bacon_net, :start_server, true) do

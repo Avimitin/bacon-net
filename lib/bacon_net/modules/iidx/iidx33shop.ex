@@ -1,7 +1,7 @@
 defmodule BaconNet.Modules.Iidx.Iidx33shop do
   @moduledoc "Port of modules/iidx/iidx33shop.py."
 
-  alias BaconNet.{Config, Core, DB, E, XNode}
+  alias BaconNet.{Config, Core, E, Shop, XNode}
 
   def routes do
     %{
@@ -23,14 +23,14 @@ defmodule BaconNet.Modules.Iidx.Iidx33shop do
     {info, conn} = Core.process_request(conn)
     pcbid = XNode.attr(info.root, "srcid")
 
-    op = DB.get("shop", %{"pcbid" => pcbid}) || %{}
+    opname = Shop.opname_for(pcbid) || Config.arcade()
 
     response =
       E.e(
         "response",
         E.e("IIDX33shop",
           cls_opt: 0,
-          opname: Map.get(op, "opname", Config.arcade()),
+          opname: opname,
           pid: 13
         )
       )
@@ -43,12 +43,9 @@ defmodule BaconNet.Modules.Iidx.Iidx33shop do
     pcbid = XNode.attr(info.root, "srcid")
     opname = Core.module_node(info) |> XNode.attr("opname")
 
-    shop_info = %{
-      "pcbid" => pcbid,
-      "opname" => opname
-    }
-
-    DB.upsert("shop", shop_info, %{"pcbid" => pcbid})
+    # The cabinet is guaranteed permitted by the guard; permit is idempotent
+    # there and updates the display label.
+    Shop.permit(pcbid, opname)
 
     Core.send_response(conn, info, E.e("response", E.e("IIDX33shop")))
   end

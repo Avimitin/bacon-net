@@ -5,10 +5,10 @@ defmodule BaconNet.DB.Document do
 
   @primary_key false
   schema "documents" do
-    field :table_name, :string
-    field :doc_id, :string
-    field :seq, :integer
-    field :data, :map
-    field :inserted_at, :utc_datetime_usec
+    field(:table_name, :string)
+    field(:doc_id, :string)
+    field(:seq, :integer)
+    field(:data, :map)
+    field(:inserted_at, :utc_datetime_usec)
   end
 end

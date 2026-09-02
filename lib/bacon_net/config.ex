@@ -29,6 +29,16 @@ defmodule BaconNet.Config do
   def paseli, do: Application.get_env(:bacon_net, :paseli, 10_000)
   def maintenance_mode, do: Application.get_env(:bacon_net, :maintenance_mode, false)
 
+  @doc """
+  Readiness probe run by GET /readyz: a zero-arity fun returning {:ok, _}
+  when the server can reach its database. Overridable via Application env
+  (used by tests to exercise the 503 path).
+  """
+  def readiness_check do
+    Application.get_env(:bacon_net, :readiness_check) ||
+      fn -> BaconNet.Repo.query("SELECT 1") end
+  end
+
   def max_decompressed_body,
     do: Application.get_env(:bacon_net, :max_decompressed_body, 16_000_000)
 

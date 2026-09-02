@@ -1,7 +1,7 @@
 defmodule BaconNet.Modules.Iidx.Iidx33music do
   @moduledoc "Port of modules/iidx/iidx33music.py."
 
-  alias BaconNet.{Config, Core, DB, E, XNode}
+  alias BaconNet.{Config, Core, DB, E, Scores, XNode}
 
   # ClearFlags: NO_PLAY 0, FAILED 1, ASSIST_CLEAR 2, EASY_CLEAR 3, CLEAR 4,
   # HARD_CLEAR 5, EX_HARD_CLEAR 6, FULL_COMBO 7
@@ -238,7 +238,7 @@ defmodule BaconNet.Modules.Iidx.Iidx33music do
     ghost = log |> XNode.child("ghost") |> text()
     ghost_gauge = log |> XNode.child("ghost_gauge") |> text()
 
-    DB.insert("iidx_scores", %{
+    attempt_doc = %{
       "timestamp" => timestamp,
       "game_version" => game_version,
       "iidx_id" => iidx_id,
@@ -260,7 +260,106 @@ defmodule BaconNet.Modules.Iidx.Iidx33music do
       "option2" => option2,
       "ghost" => ghost,
       "ghost_gauge" => ghost_gauge
-    })
+    }
+
+    event = %{
+      game: "iidx",
+      version: game_version,
+      player: to_string(iidx_id),
+      song: music_id,
+      chart: note_id,
+      play_style: to_string(play_style),
+      score: ex_score,
+      clear: clear_flg,
+      miss: miss_num,
+      payload: %{
+        "ghost" => ghost,
+        "ghost_gauge" => ghost_gauge,
+        "gauge_type" => gauge_type,
+        "game_version" => game_version,
+        "pid" => pid
+      },
+      attempt: attempt_doc,
+      stats: %{clear: clear_flg >= @easy_clear, fc: clear_flg == @full_combo},
+      merge: Scores.Merge.spec("iidx"),
+      idempotency: %{
+        key: Scores.derive_key("iidx", info.method, iidx_id, info.text),
+        scope: "IIDX33music.reg",
+        payload_hash: Scores.hash_payload(info.text)
+      },
+      dual_write: fn recorded ->
+        dual_write_reg(
+          recorded,
+          attempt_doc,
+          game_version,
+          iidx_id,
+          pid,
+          play_style,
+          music_id,
+          note_id,
+          clear_flg,
+          ex_score,
+          miss_num,
+          ghost,
+          ghost_gauge,
+          gauge_type
+        )
+      end
+    }
+
+    case Scores.record_attempt(event) do
+      {:ok, %{status: :recorded, extra: score_stats}} ->
+        send_reg_response(
+          conn,
+          info,
+          game_version,
+          iidx_id,
+          play_style,
+          music_id,
+          note_id,
+          clid,
+          score_stats
+        )
+
+      {:ok, %{status: :replayed, response: response}} ->
+        send_reg_response(
+          conn,
+          info,
+          game_version,
+          iidx_id,
+          play_style,
+          music_id,
+          note_id,
+          clid,
+          response["extra"]
+        )
+
+      {:error, _reason} ->
+        Core.reject_request(conn, info)
+    end
+  end
+
+  # Project the recorded play into the legacy document tables, in the same
+  # transaction. iidx api/pc/older-version modules still read those; the
+  # relational best_scores row lock serializes writers per player+chart, so
+  # the read-modify-write merge below cannot lose updates.
+  defp dual_write_reg(
+         recorded,
+         attempt_doc,
+         game_version,
+         iidx_id,
+         pid,
+         play_style,
+         music_id,
+         note_id,
+         clear_flg,
+         ex_score,
+         miss_num,
+         ghost,
+         ghost_gauge,
+         gauge_type
+       ) do
+    DB.insert("iidx_scores", attempt_doc)
 
     best_conds = %{
       "iidx_id" => iidx_id,
@@ -345,6 +444,21 @@ defmodule BaconNet.Modules.Iidx.Iidx33music do
 
     DB.upsert("iidx_score_stats", score_stats, stats_conds)
 
+    _ = recorded
+    score_stats
+  end
+
+  defp send_reg_response(
+         conn,
+         info,
+         game_version,
+         iidx_id,
+         play_style,
+         music_id,
+         note_id,
+         clid,
+         score_stats
+       ) do
     ranklist_scores =
       DB.search("iidx_scores_best", %{
         "play_style" => play_style,

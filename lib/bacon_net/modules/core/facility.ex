@@ -1,7 +1,7 @@
 defmodule BaconNet.Modules.Core.Facility do
   @moduledoc "Port of modules/core/facility.py."
 
-  alias BaconNet.{Config, Core, DB, E, XNode}
+  alias BaconNet.{Config, Core, E, Shop, XNode}
 
   def routes do
     %{
@@ -15,8 +15,7 @@ defmodule BaconNet.Modules.Core.Facility do
     {info, conn} = Core.process_request(conn)
     pcbid = XNode.attr(info.root, "srcid")
 
-    op = DB.get("shop", %{"pcbid" => pcbid}) || %{}
-    opname = Map.get(op, "opname", Config.arcade())
+    opname = Shop.opname_for(pcbid) || Config.arcade()
     client_host = conn.remote_ip |> :inet.ntoa() |> to_string()
 
     response =

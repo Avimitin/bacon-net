@@ -3,22 +3,24 @@ defmodule BaconNet.AccountTest do
 
   import Plug.Test
 
-  alias BaconNet.DB
+  alias BaconNet.{Accounts, DB}
+  alias BaconNet.Repo
 
   @card_uid "E004009999999999"
 
   setup do
-    DB.drop_table("webui_users")
-    DB.drop_table("webui_sessions")
-    DB.drop_table("test_profile")
+    cleanup()
 
-    on_exit(fn ->
-      DB.drop_table("webui_users")
-      DB.drop_table("webui_sessions")
-      DB.drop_table("test_profile")
-    end)
+    on_exit(&cleanup/0)
 
     :ok
+  end
+
+  defp cleanup do
+    Repo.delete_all(BaconNet.Accounts.Session)
+    Repo.delete_all(BaconNet.Accounts.Card)
+    Repo.delete_all(BaconNet.Accounts.Account)
+    DB.drop_table("test_profile")
   end
 
   defp call(method, path, body \\ nil, token \\ nil) do
@@ -51,6 +53,8 @@ defmodule BaconNet.AccountTest do
     assert %{"token" => _, "username" => "player1", "expires_at" => _} = json(conn)
 
     assert register().status == 409
+    # differently cased spelling conflicts too
+    assert register("PLAYER1").status == 409
   end
 
   test "login, me, logout" do
@@ -72,17 +76,33 @@ defmodule BaconNet.AccountTest do
     assert call(:get, "/account/api/me", nil, token).status == 401
   end
 
-  test "sessions store only the token hash" do
+  test "sessions store only the token digest; revoked and expired tokens are rejected" do
     %{"token" => token} = json(register())
 
-    session = DB.get("webui_sessions", %{"username" => "player1"})
-    assert session["token"] == :crypto.hash(:sha256, token) |> Base.encode16()
-    refute Jason.encode!(session) =~ token
+    session = Repo.get_by!(BaconNet.Accounts.Session, account_id: account_id("player1"))
+    assert session.token_digest == Accounts.hash_token(token)
+    refute inspect(session) =~ token
 
-    # the plaintext token still authenticates and logs out
+    # the plaintext token still authenticates and logout revokes it
     assert call(:get, "/account/api/me", nil, token).status == 200
     assert call(:post, "/account/api/logout", nil, token).status == 204
-    assert DB.get("webui_sessions", %{"username" => "player1"}) == nil
+    assert call(:get, "/account/api/me", nil, token).status == 401
+
+    # an expired token is rejected
+    %{"token" => expired} =
+      json(
+        call(:post, "/account/api/login", %{
+          "username" => "player1",
+          "password" => "password123"
+        })
+      )
+
+    Accounts.Session
+    |> Repo.get_by!(token_digest: Accounts.hash_token(expired))
+    |> Ecto.Changeset.change(expires_at: System.system_time(:second) - 1)
+    |> Repo.update!()
+
+    assert call(:get, "/account/api/me", nil, expired).status == 401
   end
 
   test "oversized passwords are rejected before hashing" do
@@ -171,44 +191,149 @@ defmodule BaconNet.AccountTest do
     # bob sees nothing
     assert %{"profiles" => []} = json(call(:get, "/account/api/profiles", nil, t2))
 
-    # alice can fetch and patch her profile; card reassignment is stripped
+    # alice can fetch her profile
     conn = call(:get, "/account/api/profiles/iidx_profile/#{profile_id}", nil, t1)
     assert conn.status == 200
-
-    conn =
-      call(
-        :patch,
-        "/account/api/profiles/iidx_profile/#{profile_id}",
-        %{"pin" => "9999", "card" => "E004000000000000"},
-        t1
-      )
-
-    assert conn.status == 200
-    doc = json(conn)
-    assert doc["pin"] == "9999"
-    assert doc["card"] == @card_uid
 
     # bob cannot touch alice's profile
     assert call(:get, "/account/api/profiles/iidx_profile/#{profile_id}", nil, t2).status == 404
 
-    assert call(:patch, "/account/api/profiles/iidx_profile/#{profile_id}", %{"pin" => "0"}, t2).status ==
+    assert call(
+             :patch,
+             "/account/api/profiles/iidx_profile/#{profile_id}",
+             %{"pin" => "0000"},
+             t2
+           ).status ==
              404
 
     # unknown table is rejected even for the owner
-    assert call(:get, "/account/api/profiles/webui_users/1", nil, t1).status == 404
+    assert call(:get, "/account/api/profiles/accounts/1", nil, t1).status == 404
 
-    # scores: alice gets only her own rows
+    # scores: alice gets only her own rows, in the paginated shape
     conn = call(:get, "/account/api/scores", nil, t1)
-    %{"games" => [g]} = json(conn)
-    assert g["game"] == "iidx"
-    assert g["ids"] == [12_345_678]
-    assert [%{"ex_score" => 1500}] = g["tables"]["iidx_scores"]
+    %{"items" => [row], "next_cursor" => nil} = json(conn)
+    assert row["ex_score"] == 1500
+    assert row["game"] == "iidx"
+    assert row["table"] == "iidx_scores"
   after
     DB.drop_table("iidx_profile")
     DB.drop_table("iidx_scores")
   end
 
-  test "rankings aggregate best scores across players" do
+  test "profile PATCH only accepts allowlisted fields" do
+    %{"token" => token} = json(register("alice", "password123"))
+    call(:post, "/account/api/cards", %{"card" => @card_uid}, token)
+
+    {profile_id, _} =
+      DB.insert_with_id("iidx_profile", %{
+        "card" => @card_uid,
+        "iidx_id" => 12_345_678,
+        "pin" => "1234",
+        "version" => %{"33" => %{"djname" => "ＡＬＩＣＥ"}}
+      })
+
+    patch = fn fields ->
+      call(:patch, "/account/api/profiles/iidx_profile/#{profile_id}", fields, token)
+    end
+
+    # non-allowlisted fields are rejected outright (never silently stripped)
+    assert patch.(%{"card" => "E004000000000000"}).status == 400
+    assert patch.(%{"_id" => 1}).status == 400
+    assert patch.(%{"iidx_id" => 1}).status == 400
+    assert patch.(%{"pin" => "9999", "card" => "E004000000000000"}).status == 400
+    assert patch.(%{}).status == 400
+
+    # invalid pin values
+    assert patch.(%{"pin" => "abc"}).status == 400
+    assert patch.(%{"pin" => "12345"}).status == 400
+    assert patch.(%{"pin" => 1234}).status == 400
+
+    # invalid version shapes
+    assert patch.(%{"version" => "33"}).status == 400
+    assert patch.(%{"version" => %{"x" => %{}}}).status == 400
+    assert patch.(%{"version" => %{"33" => %{"nested" => %{"bad" => 1}}}}).status == 400
+
+    # nothing was written by any of the rejected patches
+    doc = DB.get_by_id("iidx_profile", profile_id)
+    assert doc["card"] == @card_uid
+    assert doc["pin"] == "1234"
+
+    # a valid patch merges per version key and keeps other versions
+    conn =
+      patch.(%{
+        "pin" => "9999",
+        "version" => %{"33" => %{"djname" => "ＮＥＷ"}, "30" => %{"djname" => "ＯＬＤ"}}
+      })
+
+    assert conn.status == 200
+    doc = json(conn)
+    assert doc["pin"] == "9999"
+    assert doc["card"] == @card_uid
+    assert doc["version"]["33"]["djname"] == "ＮＥＷ"
+    assert doc["version"]["30"]["djname"] == "ＯＬＤ"
+  after
+    DB.drop_table("iidx_profile")
+  end
+
+  test "scores paginate with a stable cursor order" do
+    %{"token" => token} = json(register("alice", "password123"))
+    call(:post, "/account/api/cards", %{"card" => @card_uid}, token)
+
+    DB.insert("iidx_profile", %{"card" => @card_uid, "iidx_id" => 42})
+
+    for i <- 1..5 do
+      DB.insert("iidx_scores", %{
+        "iidx_id" => 42,
+        "music_id" => 1000 + i,
+        "chart_id" => 1,
+        "ex_score" => i
+      })
+    end
+
+    # first page
+    conn = call(:get, "/account/api/scores?limit=2", nil, token)
+    %{"items" => first, "next_cursor" => c1} = json(conn)
+    assert Enum.map(first, & &1["ex_score"]) == [1, 2]
+    assert is_binary(c1)
+
+    # middle page
+    conn = call(:get, "/account/api/scores?limit=2&cursor=#{c1}", nil, token)
+    %{"items" => second, "next_cursor" => c2} = json(conn)
+    assert Enum.map(second, & &1["ex_score"]) == [3, 4]
+    assert is_binary(c2)
+
+    # last page has no next cursor
+    conn = call(:get, "/account/api/scores?limit=2&cursor=#{c2}", nil, token)
+    %{"items" => third, "next_cursor" => nil} = json(conn)
+    assert Enum.map(third, & &1["ex_score"]) == [5]
+
+    # past the end: empty page
+    conn = call(:get, "/account/api/scores?cursor=#{encode_cursor(999_999)}", nil, token)
+    assert %{"items" => [], "next_cursor" => nil} = json(conn)
+
+    # invalid cursors and limits are 400
+    assert call(:get, "/account/api/scores?cursor=not-a-cursor", nil, token).status == 400
+
+    assert call(
+             :get,
+             "/account/api/scores?cursor=#{Base.url_encode64("{}", padding: false)}",
+             nil,
+             token
+           ).status == 400
+
+    assert call(:get, "/account/api/scores?limit=0", nil, token).status == 400
+    assert call(:get, "/account/api/scores?limit=abc", nil, token).status == 400
+
+    # limit is clamped to 200
+    conn = call(:get, "/account/api/scores?limit=9999", nil, token)
+    assert conn.status == 200
+    assert length(json(conn)["items"]) == 5
+  after
+    DB.drop_table("iidx_profile")
+    DB.drop_table("iidx_scores")
+  end
+
+  test "rankings require game+song+chart and return a bounded SQL top-N" do
     %{"token" => token} = json(register())
 
     DB.insert_with_id("iidx_profile", %{
@@ -244,22 +369,94 @@ defmodule BaconNet.AccountTest do
       "ex_score" => 700
     })
 
-    conn = call(:get, "/account/api/rankings", nil, token)
-    %{"games" => [g]} = json(conn)
-    assert g["game"] == "iidx"
+    # missing/invalid parameters are 400
+    assert call(:get, "/account/api/rankings", nil, token).status == 400
+    assert call(:get, "/account/api/rankings?game=iidx", nil, token).status == 400
 
-    [first, second, other_song] = g["entries"]
+    assert call(:get, "/account/api/rankings?game=nope&song=1000&chart=2", nil, token).status ==
+             400
 
-    assert {first["song"], first["rank"], first["score"], first["name"]} ==
-             {1000, 1, 1900, "ＳＥＣＯＮＤ"}
+    assert call(:get, "/account/api/rankings?game=iidx&song=abc&chart=2", nil, token).status ==
+             400
 
-    assert {second["song"], second["rank"], second["score"], second["name"]} ==
-             {1000, 2, 1800, "ＴＯＰ"}
+    conn = call(:get, "/account/api/rankings?game=iidx&song=1000&chart=2", nil, token)
+    assert conn.status == 200
 
-    assert {other_song["song"], other_song["rank"]} == {1001, 1}
+    %{
+      "game" => "iidx",
+      "table" => "iidx_scores_best",
+      "song" => 1000,
+      "chart" => 2,
+      "items" => items
+    } =
+      json(conn)
+
+    assert [
+             %{"rank" => 1, "score" => 1900, "name" => "ＳＥＣＯＮＤ"},
+             %{"rank" => 2, "score" => 1800, "name" => "ＴＯＰ"}
+           ] = items
+
+    # bounded top-N
+    conn = call(:get, "/account/api/rankings?game=iidx&song=1000&chart=2&limit=1", nil, token)
+    assert [%{"rank" => 1, "score" => 1900}] = json(conn)["items"]
+
+    # a different song has its own ranking
+    conn = call(:get, "/account/api/rankings?game=iidx&song=1001&chart=2", nil, token)
+    assert [%{"rank" => 1, "score" => 700, "name" => "ＴＯＰ"}] = json(conn)["items"]
+
+    # no scores: empty items
+    conn = call(:get, "/account/api/rankings?game=iidx&song=9999&chart=2", nil, token)
+    assert %{"items" => []} = json(conn)
   after
     DB.drop_table("iidx_profile")
     DB.drop_table("iidx_scores_best")
+  end
+
+  test "concurrent registrations of the same username commit exactly once" do
+    results =
+      ["player1", "PLAYER1", "Player1", "pLaYeR1"]
+      |> Task.async_stream(fn username -> register(username).status end,
+        max_concurrency: 4,
+        timeout: 30_000
+      )
+      |> Enum.map(fn {:ok, status} -> status end)
+
+    assert Enum.count(results, &(&1 == 201)) == 1
+    assert Enum.count(results, &(&1 == 409)) == 3
+    assert length(Repo.all(BaconNet.Accounts.Account)) == 1
+  end
+
+  test "concurrent binds of the same card leave exactly one owner" do
+    %{"token" => t1} = json(register("alice", "password123"))
+    %{"token" => t2} = json(register("bob", "password123"))
+
+    results =
+      [t1, t2, t1, t2]
+      |> Task.async_stream(
+        fn token -> call(:post, "/account/api/cards", %{"card" => @card_uid}, token).status end,
+        max_concurrency: 4,
+        timeout: 30_000
+      )
+      |> Enum.map(fn {:ok, status} -> status end)
+
+    assert Enum.count(results, &(&1 == 200)) == 1
+    assert Enum.count(results, &(&1 == 409)) == 3
+
+    assert [%{card_uid: @card_uid}] =
+             Repo.all(BaconNet.Accounts.Card) |> Enum.map(&Map.take(&1, [:card_uid]))
+  end
+
+  test "registration rolls back when the session step fails" do
+    before_count = Repo.aggregate(BaconNet.Accounts.Account, :count)
+
+    assert {:error, :boom} =
+             Accounts.register("rollback1", "password123",
+               before_commit: fn _account, _session -> {:error, :boom} end
+             )
+
+    assert Repo.aggregate(BaconNet.Accounts.Account, :count) == before_count
+    assert Accounts.get_by_username("rollback1") == nil
+    assert Repo.all(BaconNet.Accounts.Session) == []
   end
 
   test "unauthenticated requests are rejected" do
@@ -275,7 +472,8 @@ defmodule BaconNet.AccountTest do
     # session works before the ban
     assert call(:get, "/account/api/me", nil, token).status == 200
 
-    DB.update("webui_users", %{"banned" => true}, %{"username" => "banned1"})
+    account = Accounts.get_by_username("banned1")
+    Accounts.set_banned(account, true)
 
     # login is rejected with 403 account_banned
     conn =
@@ -288,7 +486,7 @@ defmodule BaconNet.AccountTest do
     assert call(:get, "/account/api/me", nil, token).status == 401
 
     # unban restores login
-    DB.update("webui_users", %{"banned" => false}, %{"username" => "banned1"})
+    "banned1" |> Accounts.get_by_username() |> Accounts.set_banned(false)
 
     assert call(:post, "/account/api/login", %{
              "username" => "banned1",
@@ -319,4 +517,10 @@ defmodule BaconNet.AccountTest do
       Application.delete_env(:bacon_net, :admin_token)
     end
   end
+
+  defp account_id(username) do
+    Accounts.get_by_username(username).id
+  end
+
+  defp encode_cursor(seq), do: seq |> Jason.encode!() |> Base.url_encode64(padding: false)
 end

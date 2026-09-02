@@ -3,24 +3,29 @@ defmodule BaconNet.EacoinTest do
 
   import Plug.Test
 
-  alias BaconNet.{DB, Kbinxml, State, XNode}
+  alias BaconNet.{Kbinxml, Repo, Shop, State, Tenancy, Wallet, XNode}
 
   @pcbid "EACOINTESTPCBID1"
   @card "E004001122334455"
 
   setup do
-    DB.upsert("shop", %{"pcbid" => @pcbid, "permitted" => true}, %{"pcbid" => @pcbid})
-    DB.drop_table("paseli")
+    {:ok, _} = Shop.permit(@pcbid)
+    clean_wallet()
     State.put(:eacoin_payments, %{})
     State.put(:eacoin_sessid, 0)
 
     on_exit(fn ->
-      DB.drop_table("paseli")
-      DB.remove("shop", %{"pcbid" => @pcbid})
+      clean_wallet()
+      Tenancy.delete(@pcbid)
       State.put(:eacoin_payments, %{})
     end)
 
     :ok
+  end
+
+  defp clean_wallet do
+    Repo.delete_all(Wallet.Entry)
+    Repo.delete_all(Wallet.Account)
   end
 
   defp call_eacoin(method, inner) do
@@ -66,9 +71,9 @@ defmodule BaconNet.EacoinTest do
   end
 
   defp stored_balance(card \\ @card) do
-    case DB.get("paseli", %{"cardid" => card}) do
+    case Wallet.account(card) do
       nil -> nil
-      bal -> bal["balance"]
+      account -> account.balance
     end
   end
 
@@ -133,9 +138,7 @@ defmodule BaconNet.EacoinTest do
   end
 
   test "threshold reset is reflected in both response and storage" do
-    DB.upsert("paseli", %{"cardid" => @card, "balance" => 1_500, "total_spent" => 0}, %{
-      "cardid" => @card
-    })
+    {:ok, 1_500} = Wallet.set_balance(@card, 1_500)
 
     sessid = checkin()
 

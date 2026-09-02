@@ -3,22 +3,45 @@ defmodule BaconNet.Modules.Account do
   Player account API for the webui (register/login, card binding, own
   profiles/settings, own scores, server rankings).
 
-  Accounts and sessions are stored in the regular DB (`webui_users`,
-  `webui_sessions` tables). Authentication is `Authorization: Bearer <token>`.
-  Every profile/score access is checked against the cards bound to the
-  account, and profile patches can never reassign a profile's `card`.
+  Accounts, sessions, and card bindings live in the normalized
+  `accounts`/`account_sessions`/`account_cards` tables via
+  `BaconNet.Accounts`; uniqueness and ownership are enforced by database
+  constraints, so concurrent registrations and card binds cannot race.
+  Authentication is `Authorization: Bearer <token>`; sessions store only
+  the SHA-256 digest of the token.
+
+  Game profiles and scores stay JSONB documents in the `documents` table
+  (game-defined shapes), but every per-user lookup filters by the owner's
+  bound cards / game ids with index-friendly predicates.
+
+  Profile PATCH is restricted to an allowlist of editable top-level fields
+  (`pin`, `version`) — a profile can never be reassigned to another card,
+  and no credentials/identity fields can be written. Profile documents
+  carry no version counter, so there is no etag/optimistic concurrency;
+  the allowlist plus per-version-key merge is the guard.
+
+  Score history and rankings are paginated: `{"items": [...],
+  "next_cursor": ...}` with `limit` (default 50, max 200) and an opaque
+  `cursor` param. Rankings additionally require `game`, `song`, and
+  `chart` and compute a bounded top-N in SQL.
   """
 
-  import Plug.Conn, only: [get_req_header: 2, send_resp: 3]
+  import Ecto.Query
+  import Plug.Conn, only: [fetch_query_params: 1, get_req_header: 2, send_resp: 3]
 
-  alias BaconNet.{Api, Card, DB}
+  alias BaconNet.{Accounts, Api, Card, DB}
+  alias BaconNet.Accounts.Account
+  alias BaconNet.DB.Document
+  alias BaconNet.Repo
 
-  @users_table "webui_users"
-  @sessions_table "webui_sessions"
-  @session_ttl_seconds 30 * 24 * 3600
-  @pbkdf2_iterations 200_000
   @max_password_bytes 1024
-  @ranking_top 10
+  @default_limit 50
+  @max_limit 200
+
+  # Editable top-level profile fields for PATCH. Never `_id`, `card`, the
+  # game's id field, or anything credential-shaped; everything else the
+  # games write is read-only through this API.
+  @editable_profile_fields ["pin", "version"]
 
   # Game registry: how profiles and score tables link together per game.
   # `song_field`/`chart_field`/`score_field` describe score rows so the
@@ -201,29 +224,21 @@ defmodule BaconNet.Modules.Account do
   def account_register(conn, _params) do
     with {:ok, body} <- body_object(conn),
          {:ok, username} <- valid_username(body["username"]),
-         {:ok, password} <- valid_password(body["password"]),
-         :available <- username_available(username) do
-      salt = :crypto.strong_rand_bytes(16)
+         {:ok, password} <- valid_password(body["password"]) do
+      case Accounts.register(username, password) do
+        {:ok, _account, token, expires_at} ->
+          conn
+          |> Plug.Conn.put_resp_content_type("application/json")
+          |> send_resp(201, Jason.encode!(session_response(token, expires_at, username)))
 
-      user = %{
-        "username" => username,
-        "pass_hash" => hash_password(password, salt),
-        "salt" => Base.encode16(salt),
-        "iterations" => @pbkdf2_iterations,
-        "cards" => [],
-        "banned" => false,
-        "created_at" => System.system_time(:second)
-      }
+        {:error, :username_taken} ->
+          Api.error(conn, 409, "username_taken")
 
-      DB.insert(@users_table, user)
-      {token, expires_at} = create_session(username)
-
-      conn
-      |> Plug.Conn.put_resp_content_type("application/json")
-      |> send_resp(201, Jason.encode!(session_response(token, expires_at, username)))
+        {:error, _other} ->
+          Api.error(conn, 400, "invalid_body")
+      end
     else
       {:error, reason} -> Api.error(conn, 400, reason)
-      :taken -> Api.error(conn, 409, "username_taken")
       :error -> Api.error(conn, 400, "invalid_body")
     end
   end
@@ -233,15 +248,14 @@ defmodule BaconNet.Modules.Account do
          username when is_binary(username) <- body["username"],
          password when is_binary(password) and byte_size(password) <= @max_password_bytes <-
            body["password"],
-         user when not is_nil(user) <-
-           DB.get(@users_table, %{"username" => String.downcase(username)}),
-         true <- verify_password(user, password) do
-      if user["banned"] == true do
+         %Account{} = account <- Accounts.get_by_username(username),
+         {:ok, account} <- Accounts.verify_password(account, password) do
+      if account.banned do
         Api.error(conn, 403, "account_banned")
       else
-        purge_expired_sessions()
-        {token, expires_at} = create_session(user["username"])
-        Api.json(conn, session_response(token, expires_at, user["username"]))
+        Accounts.purge_expired_sessions()
+        {token, expires_at} = Accounts.create_session(account)
+        Api.json(conn, session_response(token, expires_at, account.username))
       end
     else
       _ -> Api.error(conn, 401, "invalid_credentials")
@@ -249,8 +263,8 @@ defmodule BaconNet.Modules.Account do
   end
 
   def account_logout(conn, _params) do
-    with_auth(conn, fn _user, token ->
-      DB.remove(@sessions_table, %{"token" => token})
+    with_auth(conn, fn _account, digest ->
+      Accounts.revoke_session(digest)
       send_resp(conn, 204, "")
     end)
   end
@@ -260,30 +274,32 @@ defmodule BaconNet.Modules.Account do
   end
 
   def account_me(conn, _params) do
-    with_auth(conn, fn user, _token ->
-      Api.json(conn, public_user(user))
+    with_auth(conn, fn account, _digest ->
+      Api.json(conn, public_user(account))
     end)
   end
 
   ## Card binding
 
   def account_card_bind(conn, _params) do
-    with_auth(conn, fn user, _token ->
+    with_auth(conn, fn account, _digest ->
       with {:ok, body} <- body_object(conn),
            normalized when not is_nil(normalized) <- Card.normalize(body["card"] || "") do
-        uid = normalized["uid"]
+        case Accounts.bind_card(account, normalized["uid"], normalized["konami_id"]) do
+          {:ok, _card} ->
+            Api.json(conn, %{
+              "cards" => Accounts.list_card_uids(account.id),
+              "bound" => normalized
+            })
 
-        cond do
-          uid in user["cards"] ->
+          {:error, :already_bound} ->
             Api.error(conn, 409, "card_already_bound")
 
-          bound_to_other?(uid, user["username"]) ->
+          {:error, :bound_to_other} ->
             Api.error(conn, 409, "card_bound_to_other_account")
 
-          true ->
-            cards = user["cards"] ++ [uid]
-            DB.update(@users_table, %{"cards" => cards}, %{"username" => user["username"]})
-            Api.json(conn, %{"cards" => cards, "bound" => normalized})
+          {:error, _changeset} ->
+            Api.error(conn, 400, "invalid_card")
         end
       else
         :error -> Api.error(conn, 400, "invalid_body")
@@ -293,15 +309,12 @@ defmodule BaconNet.Modules.Account do
   end
 
   def account_card_unbind(conn, %{"card" => card}) do
-    with_auth(conn, fn user, _token ->
+    with_auth(conn, fn account, _digest ->
       uid = (Card.normalize(card) || %{}) |> Map.get("uid", String.upcase(card))
 
-      if uid in user["cards"] do
-        cards = List.delete(user["cards"], uid)
-        DB.update(@users_table, %{"cards" => cards}, %{"username" => user["username"]})
-        Api.json(conn, %{"cards" => cards})
-      else
-        Api.error(conn, 404, "not_found")
+      case Accounts.unbind_card(account, uid) do
+        :ok -> Api.json(conn, %{"cards" => Accounts.list_card_uids(account.id)})
+        {:error, :not_found} -> Api.error(conn, 404, "not_found")
       end
     end)
   end
@@ -309,11 +322,12 @@ defmodule BaconNet.Modules.Account do
   ## Profiles (ownership-checked)
 
   def account_profiles(conn, _params) do
-    with_auth(conn, fn user, _token ->
+    with_auth(conn, fn account, _digest ->
+      cards = Accounts.list_card_uids(account.id)
+
       profiles =
         for game <- @games,
-            {doc_id, doc} <- DB.all_with_ids(game["profile_table"]),
-            doc["card"] in user["cards"] do
+            {doc_id, doc} <- docs_with_any_card(game["profile_table"], cards) do
           %{
             "game" => game["key"],
             "table" => game["profile_table"],
@@ -331,10 +345,10 @@ defmodule BaconNet.Modules.Account do
   end
 
   def account_profile_get(conn, %{"table" => table, "id" => id}) do
-    with_auth(conn, fn user, _token ->
+    with_auth(conn, fn account, _digest ->
       with :ok <- known_profile_table(table),
            doc when not is_nil(doc) <- DB.get_by_id(table, id),
-           true <- doc["card"] in user["cards"] do
+           true <- doc["card"] in Accounts.list_card_uids(account.id) do
         Api.json(conn, Map.put(doc, "_id", id))
       else
         _ -> Api.error(conn, 404, "not_found")
@@ -343,97 +357,89 @@ defmodule BaconNet.Modules.Account do
   end
 
   def account_profile_patch(conn, %{"table" => table, "id" => id}) do
-    with_auth(conn, fn user, _token ->
+    with_auth(conn, fn account, _digest ->
       with :ok <- known_profile_table(table),
            doc when not is_nil(doc) <- DB.get_by_id(table, id),
-           true <- doc["card"] in user["cards"],
-           {:ok, fields} <- body_object(conn) do
-        # `card` is stripped so a profile can never be reassigned to a
-        # different card through this endpoint.
-        fields = fields |> Map.delete("_id") |> Map.delete("card")
-        :ok = DB.update_by_id(table, id, fields)
+           true <- doc["card"] in Accounts.list_card_uids(account.id),
+           {:ok, fields} <- body_object(conn),
+           {:ok, patch} <- profile_patch(doc, fields) do
+        :ok = DB.update_by_id(table, id, patch)
         Api.json(conn, Map.put(DB.get_by_id(table, id), "_id", id))
       else
         :error -> Api.error(conn, 400, "invalid_body")
+        {:error, reason} -> Api.error(conn, 400, reason)
         _ -> Api.error(conn, 404, "not_found")
       end
     end)
   end
 
-  ## Scores
+  ## Scores (cursor-paginated)
 
   def account_scores(conn, _params) do
-    with_auth(conn, fn user, _token ->
-      games =
-        for game <- @games, ids = my_game_ids(game, user["cards"]), ids != [] do
-          tables =
-            Map.new(game["score_tables"], fn st ->
-              docs =
-                ids
-                |> Enum.flat_map(&DB.search(st["table"], %{game["id_field"] => &1}))
-                |> Enum.sort_by(fn d -> {d[st["song_field"]] || 0, d[st["chart_field"]] || 0} end)
+    conn = fetch_query_params(conn)
 
-              {st["table"], docs}
-            end)
-
-          %{"game" => game["key"], "ids" => ids, "tables" => tables}
-        end
-
-      Api.json(conn, %{"games" => games})
+    with_auth(conn, fn account, _digest ->
+      with {:ok, limit} <- parse_limit(conn.query_params["limit"]),
+           {:ok, cursor} <- parse_cursor(conn.query_params["cursor"]) do
+        clauses = score_clauses(Accounts.list_card_uids(account.id))
+        {items, next_cursor} = fetch_scores_page(clauses, cursor, limit)
+        Api.json(conn, %{"items" => items, "next_cursor" => next_cursor})
+      else
+        {:error, reason} -> Api.error(conn, 400, reason)
+      end
     end)
   end
 
   def account_rankings(conn, _params) do
-    with_auth(conn, fn _user, _token ->
-      games =
-        for game <- @games, st <- game["score_tables"], st["kind"] == "best" do
-          names = name_map(game)
+    conn = fetch_query_params(conn)
 
-          entries =
-            st["table"]
-            |> DB.all()
-            |> Enum.group_by(fn d -> {d[st["song_field"]], d[st["chart_field"]]} end)
-            |> Enum.flat_map(fn {{song, chart}, rows} ->
-              rows
-              |> Enum.sort_by(&score_of(&1, st), &>=/2)
-              |> Enum.take(@ranking_top)
-              |> Enum.with_index(1)
-              |> Enum.map(fn {row, rank} ->
-                game_id = row[game["id_field"]]
+    with_auth(conn, fn _account, _digest ->
+      with {:ok, game} <- fetch_game(conn.query_params["game"]),
+           {:ok, song} <- parse_int_param(conn.query_params["song"]),
+           {:ok, chart} <- parse_int_param(conn.query_params["chart"]),
+           {:ok, limit} <- parse_limit(conn.query_params["limit"]) do
+        st = Enum.find(game["score_tables"], &(&1["kind"] == "best"))
+        rows = top_scores(st, song, chart, limit)
+        names = name_map(game, Enum.map(rows, & &1[game["id_field"]]))
 
-                %{
-                  "song" => song,
-                  "chart" => chart,
-                  "rank" => rank,
-                  "game_id" => game_id,
-                  "name" => Map.get(names, game_id),
-                  "score" => score_of(row, st),
-                  "timestamp" => row["timestamp"]
-                }
-              end)
-            end)
-            |> Enum.sort_by(fn e -> {e["song"] || 0, e["chart"] || 0, e["rank"]} end)
+        items =
+          rows
+          |> Enum.with_index(1)
+          |> Enum.map(fn {row, rank} ->
+            game_id = row[game["id_field"]]
 
-          if entries == [] do
-            nil
-          else
-            %{"game" => game["key"], "table" => st["table"], "entries" => entries}
-          end
-        end
-        |> Enum.reject(&is_nil/1)
+            %{
+              "song" => row[st["song_field"]],
+              "chart" => row[st["chart_field"]],
+              "rank" => rank,
+              "game_id" => game_id,
+              "name" => Map.get(names, game_id),
+              "score" => score_of(row, st),
+              "timestamp" => row["timestamp"]
+            }
+          end)
 
-      Api.json(conn, %{"games" => games})
+        Api.json(conn, %{
+          "game" => game["key"],
+          "table" => st["table"],
+          "song" => song,
+          "chart" => chart,
+          "items" => items
+        })
+      else
+        {:error, reason} -> Api.error(conn, 400, reason)
+      end
     end)
   end
 
-  ## Internals
+  ## Input validation
 
   defp valid_username(nil), do: {:error, "invalid_username"}
 
   defp valid_username(username) when is_binary(username) do
     username = String.downcase(username)
 
-    if username =~ ~r/^[a-z0-9_]{3,24}$/ do
+    if username =~ Account.username_regex() do
       {:ok, username}
     else
       {:error, "invalid_username"}
@@ -446,82 +452,259 @@ defmodule BaconNet.Modules.Account do
   defp valid_password(pw) when is_binary(pw) and byte_size(pw) >= 8, do: {:ok, pw}
   defp valid_password(_), do: {:error, "password_too_short"}
 
-  defp username_available(username) do
-    if DB.get(@users_table, %{"username" => username}), do: :taken, else: :available
+  # Profile PATCH allowlist: only `pin` (4-digit string) and `version`
+  # (map of numeric version key => map of scalar settings) may be written.
+  # `version` merges per version key so a patch cannot wipe other versions.
+  defp profile_patch(_doc, fields) when map_size(fields) == 0, do: {:error, "empty_patch"}
+
+  defp profile_patch(doc, fields) do
+    unknown = Map.keys(fields) -- @editable_profile_fields
+
+    if unknown != [] do
+      {:error, "field_not_editable"}
+    else
+      with {:ok, pin} <- patch_pin(fields),
+           {:ok, version} <- patch_version(doc, fields) do
+        {:ok, Map.merge(pin, version)}
+      end
+    end
   end
 
-  defp hash_password(password, salt) do
-    :crypto.pbkdf2_hmac(:sha256, password, salt, @pbkdf2_iterations, 32)
-    |> Base.encode16()
+  defp patch_pin(%{"pin" => pin}) when is_binary(pin) do
+    if pin =~ ~r/^\d{4}$/, do: {:ok, %{"pin" => pin}}, else: {:error, "invalid_pin"}
   end
 
-  defp verify_password(user, password) do
-    salt = Base.decode16!(user["salt"])
-    hash = hash_password(password, salt)
-    Plug.Crypto.secure_compare(hash, user["pass_hash"])
+  defp patch_pin(%{"pin" => _}), do: {:error, "invalid_pin"}
+  defp patch_pin(_), do: {:ok, %{}}
+
+  defp patch_version(doc, %{"version" => version}) when is_map(version) do
+    valid =
+      Enum.all?(version, fn {key, value} ->
+        is_binary(key) and key =~ ~r/^\d+$/ and is_map(value) and
+          Enum.all?(value, fn {_k, v} -> scalar?(v) end)
+      end)
+
+    if valid do
+      merged = Map.merge(doc["version"] || %{}, version)
+      {:ok, %{"version" => merged}}
+    else
+      {:error, "invalid_version"}
+    end
   end
 
-  defp create_session(username) do
-    token = :crypto.strong_rand_bytes(32) |> Base.hex_encode32(case: :lower, padding: false)
-    expires_at = System.system_time(:second) + @session_ttl_seconds
+  defp patch_version(_doc, %{"version" => _}), do: {:error, "invalid_version"}
+  defp patch_version(_doc, _fields), do: {:ok, %{}}
 
-    DB.insert(@sessions_table, %{
-      "token" => hash_token(token),
-      "username" => username,
-      "expires_at" => expires_at
-    })
+  defp scalar?(v) when is_binary(v) or is_number(v) or is_boolean(v) or is_nil(v), do: true
+  defp scalar?(v) when is_list(v), do: Enum.all?(v, &scalar?/1)
+  defp scalar?(_), do: false
 
-    {token, expires_at}
+  ## Pagination
+
+  defp parse_limit(nil), do: {:ok, @default_limit}
+
+  defp parse_limit(raw) when is_binary(raw) do
+    case Integer.parse(raw) do
+      {n, ""} when n >= 1 -> {:ok, min(n, @max_limit)}
+      _ -> {:error, "invalid_limit"}
+    end
   end
 
-  defp hash_token(token), do: :crypto.hash(:sha256, token) |> Base.encode16()
+  defp parse_limit(_), do: {:error, "invalid_limit"}
+
+  defp parse_cursor(nil), do: {:ok, nil}
+
+  defp parse_cursor(raw) when is_binary(raw) do
+    with {:ok, decoded} <- Base.url_decode64(raw, padding: false),
+         {:ok, seq} <- Jason.decode(decoded),
+         true <- is_integer(seq) do
+      {:ok, seq}
+    else
+      _ -> {:error, "invalid_cursor"}
+    end
+  end
+
+  defp parse_cursor(_), do: {:error, "invalid_cursor"}
+
+  defp encode_cursor(seq), do: seq |> Jason.encode!() |> Base.url_encode64(padding: false)
+
+  defp parse_int_param(nil), do: {:error, "missing_parameters"}
+
+  defp parse_int_param(raw) when is_binary(raw) do
+    case Integer.parse(raw) do
+      {n, ""} -> {:ok, n}
+      _ -> {:error, "invalid_parameters"}
+    end
+  end
+
+  defp parse_int_param(_), do: {:error, "invalid_parameters"}
+
+  defp fetch_game(nil), do: {:error, "missing_parameters"}
+
+  defp fetch_game(key) do
+    case Enum.find(@games, &(&1["key"] == key)) do
+      nil -> {:error, "unknown_game"}
+      game -> {:ok, game}
+    end
+  end
+
+  ## Document queries (index-friendly: containment matches the GIN index)
+
+  # Profile docs owned by any of the account's cards. `data @> {"card": uid}`
+  # is exact for scalar values and can use the documents GIN index.
+  defp docs_with_any_card(_table, []), do: []
+
+  defp docs_with_any_card(table, cards) do
+    any_card =
+      Enum.reduce(cards, false, fn uid, acc ->
+        dynamic(
+          [d],
+          ^acc or fragment("? @> ?::text::jsonb", d.data, ^Jason.encode!(%{"card" => uid}))
+        )
+      end)
+
+    filter = dynamic([d], d.table_name == ^table and ^any_card)
+
+    Repo.all(
+      from(d in Document,
+        where: ^filter,
+        order_by: [asc: d.seq],
+        select: {d.doc_id, d.data}
+      )
+    )
+  end
+
+  defp my_game_ids(game, cards) do
+    game["profile_table"]
+    |> docs_with_any_card(cards)
+    |> Enum.map(fn {_id, doc} -> doc[game["id_field"]] end)
+    |> Enum.reject(&is_nil/1)
+    |> Enum.uniq()
+  end
+
+  # One {score_table, game, game_ids} clause per score table the account has
+  # profiles for.
+  defp score_clauses(cards) do
+    for game <- @games,
+        ids = my_game_ids(game, cards),
+        ids != [],
+        st <- game["score_tables"] do
+      {st, game, ids}
+    end
+  end
+
+  defp fetch_scores_page([], _cursor, _limit), do: {[], nil}
+
+  defp fetch_scores_page(clauses, cursor, limit) do
+    cond =
+      Enum.reduce(clauses, false, fn {st, game, ids}, acc ->
+        id_strings = Enum.map(ids, &to_string/1)
+
+        dynamic(
+          [d],
+          ^acc or
+            (d.table_name == ^st["table"] and
+               fragment("(?->>?) = ANY(?)", d.data, ^game["id_field"], ^id_strings))
+        )
+      end)
+
+    query =
+      from(d in Document,
+        where: ^cond,
+        order_by: [asc: d.seq],
+        limit: ^(limit + 1),
+        select: {d.seq, d.table_name, d.data}
+      )
+
+    query = if cursor, do: from(d in query, where: d.seq > ^cursor), else: query
+
+    rows = Repo.all(query)
+    {page, rest} = Enum.split(rows, limit)
+
+    next_cursor =
+      case {page, rest} do
+        {[], _} -> nil
+        {_, []} -> nil
+        _ -> page |> List.last() |> elem(0) |> encode_cursor()
+      end
+
+    table_game = Map.new(clauses, fn {st, game, _ids} -> {st["table"], game["key"]} end)
+
+    items =
+      Enum.map(page, fn {_seq, table, data} ->
+        data
+        |> Map.put("game", table_game[table])
+        |> Map.put("table", table)
+      end)
+
+    {items, next_cursor}
+  end
+
+  # Bounded top-N for one song+chart, computed in SQL: filter, order by the
+  # numeric score descending, limit. Ties keep insertion order (seq).
+  defp top_scores(st, song, chart, limit) do
+    score_field = st["score_field"]
+
+    Repo.all(
+      from(d in Document,
+        where:
+          d.table_name == ^st["table"] and
+            fragment("?->>?", d.data, ^st["song_field"]) == ^to_string(song) and
+            fragment("?->>?", d.data, ^st["chart_field"]) == ^to_string(chart),
+        order_by: [
+          desc:
+            fragment(
+              "CASE WHEN jsonb_typeof(?->?) = 'number' THEN (?->>?)::numeric ELSE 0 END",
+              d.data,
+              ^score_field,
+              d.data,
+              ^score_field
+            ),
+          asc: d.seq
+        ],
+        limit: ^limit,
+        select: d.data
+      )
+    )
+  end
+
+  defp name_map(_game, []), do: %{}
+
+  defp name_map(game, game_ids) do
+    id_strings = game_ids |> Enum.reject(&is_nil/1) |> Enum.uniq() |> Enum.map(&to_string/1)
+
+    Repo.all(
+      from(d in Document,
+        where:
+          d.table_name == ^game["profile_table"] and
+            fragment("(?->>?) = ANY(?)", d.data, ^game["id_field"], ^id_strings),
+        select: d.data
+      )
+    )
+    |> Map.new(fn doc -> {doc[game["id_field"]], Api.profile_name(doc)} end)
+  end
+
+  ## Auth plumbing
+
+  defp with_auth(conn, fun) do
+    with ["Bearer " <> token] <- get_req_header(conn, "authorization"),
+         {:ok, account, digest} <- Accounts.authenticate_token(token) do
+      fun.(account, digest)
+    else
+      _ -> Api.error(conn, 401, "unauthorized")
+    end
+  end
 
   defp session_response(token, expires_at, username) do
     %{"token" => token, "expires_at" => expires_at, "username" => username}
   end
 
-  defp purge_expired_sessions do
-    now = System.system_time(:second)
-
-    for {id, session} <- DB.all_with_ids(@sessions_table),
-        (session["expires_at"] || 0) <= now do
-      DB.remove_by_id(@sessions_table, id)
-    end
-
-    :ok
-  end
-
-  defp authenticate(conn) do
-    with ["Bearer " <> token] <- get_req_header(conn, "authorization"),
-         digest = hash_token(token),
-         session when not is_nil(session) <- DB.get(@sessions_table, %{"token" => digest}),
-         true <- (session["expires_at"] || 0) > System.system_time(:second),
-         user when not is_nil(user) <- DB.get(@users_table, %{"username" => session["username"]}),
-         false <- user["banned"] == true do
-      {:ok, user, digest}
-    else
-      _ -> :unauthorized
-    end
-  end
-
-  defp with_auth(conn, fun) do
-    case authenticate(conn) do
-      {:ok, user, token} -> fun.(user, token)
-      :unauthorized -> Api.error(conn, 401, "unauthorized")
-    end
-  end
-
-  defp bound_to_other?(uid, username) do
-    @users_table
-    |> DB.all()
-    |> Enum.any?(fn u -> u["username"] != username and uid in (u["cards"] || []) end)
-  end
-
-  defp public_user(user) do
+  defp public_user(account) do
     %{
-      "username" => user["username"],
-      "cards" => user["cards"] || [],
-      "created_at" => user["created_at"]
+      "username" => account.username,
+      "display_name" => account.display_name,
+      "cards" => Accounts.list_card_uids(account.id),
+      "created_at" => DateTime.to_unix(account.inserted_at)
     }
   end
 
@@ -549,22 +732,6 @@ defmodule BaconNet.Modules.Account do
   end
 
   defp version_keys(_), do: []
-
-  defp my_game_ids(game, cards) do
-    game["profile_table"]
-    |> DB.search_with_ids(%{})
-    |> Enum.filter(fn {_id, doc} -> doc["card"] in cards end)
-    |> Enum.map(fn {_id, doc} -> doc[game["id_field"]] end)
-    |> Enum.reject(&is_nil/1)
-    |> Enum.uniq()
-  end
-
-  defp name_map(game) do
-    game["profile_table"]
-    |> DB.all()
-    |> Map.new(fn doc -> {doc[game["id_field"]], Api.profile_name(doc)} end)
-    |> Map.delete(nil)
-  end
 
   defp score_of(row, st) do
     case row[st["score_field"]] do

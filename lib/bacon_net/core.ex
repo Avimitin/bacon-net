@@ -11,7 +11,7 @@ defmodule BaconNet.Core do
 
   import Plug.Conn
 
-  alias BaconNet.{Arc4, Config, E, Kbinxml, LZ77, Shop, XNode}
+  alias BaconNet.{Arc4, Config, E, Kbinxml, LZ77, RequestContext, Shop, XNode}
 
   @loopback "127.0.0.1"
 
@@ -171,33 +171,42 @@ defmodule BaconNet.Core do
   def module_node(_), do: nil
 
   @doc """
-  Guard a game protocol request by shop permission. Decodes the request
-  (cached for the handler) and checks the `srcid` PCBID against the shop
-  registry. Returns {:ok, conn} when the shop is permitted; otherwise
-  remembers the PCBID as pending, sends an error response, and returns
-  {:rejected, conn}.
+  Guard a game protocol request by cabinet permission. Decodes the request
+  (cached for the handler) and resolves the body-supplied `srcid` PCBID to a
+  tenancy cabinet. Returns {:ok, conn} with a `BaconNet.RequestContext`
+  attached (see RequestContext.get/1) when the cabinet is permitted;
+  otherwise remembers unknown PCBIDs as pending, emits a rejection telemetry
+  event, sends an error response, and returns {:rejected, conn}.
   """
   def guard_shop(%Plug.Conn{} = conn) do
     {info, conn} = process_request(conn)
 
     # The decode already sent a 4xx for a malformed request; do not answer twice.
     if conn.halted do
+      :telemetry.execute([:bacon_net, :decode, :rejected], %{count: 1}, %{})
       {:rejected, conn}
     else
       pcbid = info[:root] && XNode.attr(info.root, "srcid")
 
-      if Shop.permitted?(pcbid) do
-        {:ok, conn}
-      else
-        Shop.register_pending(pcbid)
+      case Shop.resolve_cabinet(pcbid) do
+        {:ok, cabinet} ->
+          {:ok, RequestContext.put(conn, request_context(conn, info, cabinet))}
 
-        if pcbid do
-          Logger.warning("rejecting game request from unpermitted PCBID #{pcbid}")
-        else
-          Logger.warning("rejecting game request without a PCBID")
-        end
+        {:error, reason} ->
+          if reason == :unknown, do: Shop.register_pending(pcbid)
 
-        {:rejected, reject_request(conn, info)}
+          :telemetry.execute([:bacon_net, :cabinet, :rejected], %{count: 1}, %{
+            pcbid: pcbid,
+            reason: reason
+          })
+
+          if pcbid do
+            Logger.warning("rejecting game request from #{reason} cabinet PCBID #{pcbid}")
+          else
+            Logger.warning("rejecting game request without a PCBID")
+          end
+
+          {:rejected, reject_request(conn, info)}
       end
     end
   end
@@ -206,6 +215,18 @@ defmodule BaconNet.Core do
   def reject_request(%Plug.Conn{} = conn, %{} = info) do
     module = Map.get(info, :module) || "services"
     send_response(conn, info, E.e("response", E.e(module, status: 1)))
+  end
+
+  defp request_context(conn, info, cabinet) do
+    %RequestContext{
+      request_id: conn.assigns[:request_id],
+      network_id: cabinet.shop && cabinet.shop.network_id,
+      shop_id: cabinet.shop_id,
+      cabinet_id: cabinet.id,
+      pcbid: cabinet.pcbid,
+      game: Map.get(info, :model),
+      version: Map.get(info, :game_version, 0)
+    }
   end
 
   @doc "Encode and send an XNode response through the request's transforms."

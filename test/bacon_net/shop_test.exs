@@ -3,14 +3,18 @@ defmodule BaconNet.ShopTest do
 
   import Plug.Test
 
-  alias BaconNet.{DB, E, Kbinxml, Shop, XNode}
+  alias BaconNet.{E, Kbinxml, RequestContext, Repo, Shop, Tenancy, XNode}
 
   @model "LDJ:J:A:A:2025091700"
 
   setup do
-    DB.drop_table("shop")
-    on_exit(fn -> DB.drop_table("shop") end)
+    clean_cabinets()
+    on_exit(&clean_cabinets/0)
     :ok
+  end
+
+  defp clean_cabinets do
+    Repo.delete_all(Tenancy.Cabinet)
   end
 
   defp kbin_post(path, module_node, pcbid) do
@@ -38,8 +42,8 @@ defmodule BaconNet.ShopTest do
     conn = services_get("UNKNOWNPCBID001")
     assert {"services", "1"} = status_of(conn)
 
-    # the unknown PCBID is remembered as a pending shop
-    assert %{"permitted" => false} = DB.get("shop", %{"pcbid" => "UNKNOWNPCBID001"})
+    # the unknown PCBID is remembered as a pending cabinet
+    assert %Tenancy.Cabinet{state: "pending"} = Tenancy.get_cabinet("UNKNOWNPCBID001")
   end
 
   test "requests without any PCBID are rejected" do
@@ -57,13 +61,20 @@ defmodule BaconNet.ShopTest do
     services = XNode.child(root, "services")
     items = XNode.children(services, "item") |> Enum.map(&XNode.attr(&1, "name"))
     assert "facility" in items
+
+    # the request context carries the resolved cabinet identity
+    ctx = RequestContext.get(conn)
+    assert %RequestContext{pcbid: "PERMITTEDPCBID01", game: "LDJ"} = ctx
+    assert ctx.cabinet_id == Tenancy.get_cabinet("PERMITTEDPCBID01").id
+    assert ctx.shop_id != nil
+    assert ctx.network_id != nil
   end
 
-  test "shop documents without permitted: true are rejected" do
-    DB.insert("shop", %{"pcbid" => "LEGACYPCBID00001", "opname" => "OLD SHOP"})
-    refute Shop.permitted?("LEGACYPCBID00001")
+  test "pending cabinets are rejected" do
+    :ok = Shop.register_pending("PENDINGPCBID0002")
+    refute Shop.permitted?("PENDINGPCBID0002")
 
-    conn = services_get("LEGACYPCBID00001")
+    conn = services_get("PENDINGPCBID0002")
     assert {"services", "1"} = status_of(conn)
   end
 
@@ -111,7 +122,7 @@ defmodule BaconNet.ShopTest do
   test "register_pending and revoke/delete on missing shops" do
     assert :ok = Shop.register_pending("PENDINGPCBID0001")
     assert :ok = Shop.register_pending("PENDINGPCBID0001")
-    assert %{"permitted" => false} = DB.get("shop", %{"pcbid" => "PENDINGPCBID0001"})
+    assert %Tenancy.Cabinet{state: "pending"} = Tenancy.get_cabinet("PENDINGPCBID0001")
 
     assert :not_found = Shop.revoke("MISSINGPCBID0001")
     assert :not_found = Shop.delete("MISSINGPCBID0001")

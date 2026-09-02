@@ -1,7 +1,14 @@
 defmodule BaconNet.Modules.Core.Eacoin do
-  @moduledoc "Port of modules/core/eacoin.py."
+  @moduledoc """
+  Port of modules/core/eacoin.py, backed by the `BaconNet.Wallet` ledger.
 
-  alias BaconNet.{Config, Core, DB, E, State, XNode}
+  Protocol response shapes and emulator semantics (configured starting
+  balance, threshold auto-top-up, checkout invalidating the session) are
+  unchanged; balances now reconcile with the wallet_entries ledger and
+  concurrent debits serialize on the wallet rollup row.
+  """
+
+  alias BaconNet.{Config, Core, E, Shop, State, Wallet, XNode}
 
   def routes do
     %{
@@ -21,8 +28,8 @@ defmodule BaconNet.Modules.Core.Eacoin do
     pcbid = XNode.attr(info.root, "srcid")
     cardid = Core.module_node(info) |> XNode.child("cardid") |> text()
 
-    op = DB.get("shop", %{"pcbid" => pcbid}) || %{}
-    bal = DB.get("paseli", %{"cardid" => cardid}) || %{}
+    opname = Shop.opname_for(pcbid)
+    balance = Wallet.balance(cardid)
 
     sessid =
       State.update(:eacoin_sessid, 0, fn s -> {s + 1, s + 1} end)
@@ -36,8 +43,8 @@ defmodule BaconNet.Modules.Core.Eacoin do
           E.e("sequence", 1, __type: "s16"),
           E.e("acstatus", 1, __type: "u8"),
           E.e("acid", 1, __type: "str"),
-          E.e("acname", Map.get(op, "opname", Config.arcade()), __type: "str"),
-          E.e("balance", Map.get(bal, "balance", Config.paseli()), __type: "s32"),
+          E.e("acname", opname || Config.arcade(), __type: "str"),
+          E.e("balance", balance, __type: "s32"),
           E.e("sessid", sessid, __type: "str"),
           E.e("inshopcharge", 1, __type: "u8")
         ])
@@ -75,33 +82,25 @@ defmodule BaconNet.Modules.Core.Eacoin do
         error_response(conn, info)
 
       true ->
-        bal =
-          DB.get("paseli", %{"cardid" => cardid}) ||
-            %{"cardid" => cardid, "balance" => Config.paseli(), "total_spent" => 0}
+        txn_key = Wallet.txn_key(sessid, payment, Map.get(info, :text))
 
-        new_balance = settle_balance(bal["balance"] - payment)
+        case Wallet.debit(cardid, payment, to_string(sessid), txn_key) do
+          {:ok, new_balance} ->
+            response =
+              E.e(
+                "response",
+                E.e("eacoin", [
+                  E.e("acstatus", 0, __type: "u8"),
+                  E.e("autocharge", 0, __type: "u8"),
+                  E.e("balance", new_balance, __type: "s32")
+                ])
+              )
 
-        DB.upsert(
-          "paseli",
-          %{
-            "cardid" => cardid,
-            "balance" => new_balance,
-            "total_spent" => bal["total_spent"] + payment
-          },
-          %{"cardid" => cardid}
-        )
+            Core.send_response(conn, info, response)
 
-        response =
-          E.e(
-            "response",
-            E.e("eacoin", [
-              E.e("acstatus", 0, __type: "u8"),
-              E.e("autocharge", 0, __type: "u8"),
-              E.e("balance", new_balance, __type: "s32")
-            ])
-          )
-
-        Core.send_response(conn, info, response)
+          {:error, _reason} ->
+            error_response(conn, info)
+        end
     end
   end
 
@@ -110,18 +109,12 @@ defmodule BaconNet.Modules.Core.Eacoin do
     cardid = Core.module_node(info) |> XNode.child("cardid") |> text()
 
     if cardid do
-      balance =
-        case DB.get("paseli", %{"cardid" => cardid}) do
-          nil -> Config.paseli()
-          bal -> bal["balance"]
-        end
-
       response =
         E.e(
           "response",
           E.e("eacoin", [
             E.e("acstatus", 0, __type: "u8"),
-            E.e("balance", balance, __type: "s32")
+            E.e("balance", Wallet.balance(cardid), __type: "s32")
           ])
         )
 
@@ -132,16 +125,9 @@ defmodule BaconNet.Modules.Core.Eacoin do
   end
 
   # A payment is a positive integer no larger than the configured balance
-  # cap (balances never exceed it, see settle_balance/1).
+  # cap (balances never exceed it, see the top-up rule in BaconNet.Wallet).
   defp valid_payment?(payment) do
     is_integer(payment) and payment > 0 and payment <= Config.paseli()
-  end
-
-  # Threshold reset rule: a balance leaving the 1000..cap band is topped
-  # back up to the configured balance. Applied before responding so the
-  # reported balance always matches the stored one.
-  defp settle_balance(balance) do
-    if balance < 1000 or balance > Config.paseli(), do: Config.paseli(), else: balance
   end
 
   defp error_response(conn, info) do

@@ -1,7 +1,7 @@
 defmodule BaconNet.Modules.Ddr.Playdata3 do
   @moduledoc "Port of modules/ddr/playdata_3.py (DDR World)."
 
-  alias BaconNet.{Core, DB, E, State, XNode}
+  alias BaconNet.{Core, DB, E, Scores, State, XNode}
 
   def routes do
     %{
@@ -506,7 +506,7 @@ defmodule BaconNet.Modules.Ddr.Playdata3 do
             ghost = find_text(n, "ghost")
             flare_force = find_int(n, "flare_force")
 
-            DB.insert("ddr_scores", %{
+            attempt_doc = %{
               "timestamp" => timestamp,
               "pcbid" => pcbid,
               "shoparea" => shoparea,
@@ -535,42 +535,59 @@ defmodule BaconNet.Modules.Ddr.Playdata3 do
               "ghostsize" => ghostsize,
               "ghost" => ghost,
               "flare_force" => flare_force
-            })
-
-            conds = %{"ddr_id" => ddr_id, "mcode" => mcode, "difficulty" => difficulty}
-            best = DB.get("ddr_scores_best", conds) || %{}
-
-            best_score_data = %{
-              "game_version" => game_version,
-              "ddr_id" => ddr_id,
-              "playstyle" => playstyle,
-              "mcode" => mcode,
-              "difficulty" => difficulty,
-              "rank" => min(rank, Map.get(best, "rank", rank)),
-              "lamp" => max(lamp, Map.get(best, "lamp", lamp)),
-              "score" => max(score, Map.get(best, "score", score)),
-              "exscore" => max(exscore, Map.get(best, "exscore", exscore)),
-              "flare_force" => max(flare_force, Map.get(best, "flare_force", flare_force))
             }
 
-            ghostid =
-              "ddr_scores"
-              |> search_ordered(fn doc ->
-                Map.get(doc, "ddr_id") == ddr_id and Map.get(doc, "mcode") == mcode and
-                  Map.get(doc, "difficulty") == difficulty and
-                  Map.get(doc, "score") == max(score, Map.get(best, "score", score))
-              end)
-              |> List.first()
-
-            best_score_data =
-              case ghostid do
-                {id, _doc} -> Map.put(best_score_data, "ghostid", id)
-                nil -> Map.put(best_score_data, "ghostid", -1)
+            event = %{
+              game: "ddr",
+              version: game_version,
+              player: to_string(ddr_id),
+              song: mcode,
+              chart: difficulty,
+              play_style: "",
+              score: score,
+              clear: lamp,
+              miss: nil,
+              payload: %{
+                "rank" => rank,
+                "exscore" => exscore,
+                "flare_force" => flare_force,
+                "ghost" => ghost,
+                "ghostsize" => ghostsize,
+                "game_version" => game_version,
+                "playstyle" => playstyle
+              },
+              attempt: attempt_doc,
+              stats: %{clear: lamp >= 2, fc: lamp >= 4},
+              merge: Scores.Merge.spec("ddr"),
+              idempotency: %{
+                key: Scores.derive_key("ddr", "playerdata_save", ddr_id, info.text),
+                scope: "playdata_3.playerdata_save",
+                payload_hash: Scores.hash_payload(info.text)
+              },
+              dual_write: fn _recorded ->
+                dual_write_score(
+                  attempt_doc,
+                  game_version,
+                  ddr_id,
+                  playstyle,
+                  mcode,
+                  difficulty,
+                  rank,
+                  lamp,
+                  score,
+                  exscore,
+                  flare_force
+                )
               end
+            }
 
-            DB.upsert("ddr_scores_best", best_score_data, conds)
+            case Scores.record_attempt(event) do
+              {:ok, _recorded} ->
+                E.e("response", E.e("playdata_3", E.e("result", 0, __type: "s32")))
 
-            E.e("response", E.e("playdata_3", E.e("result", 0, __type: "s32")))
+              {:error, _reason} ->
+                E.e("response", E.e("playdata_3", E.e("result", 1, __type: "s32")))
+            end
 
           true ->
             E.e("response", E.e("playdata_3", E.e("result", 0, __type: "s32")))
@@ -621,6 +638,59 @@ defmodule BaconNet.Modules.Ddr.Playdata3 do
   end
 
   ## Helpers
+
+  # Project the recorded play into the legacy document tables, in the same
+  # transaction. ddr api/playerdata/ghostdata modules still read those; the
+  # relational best_scores row lock serializes writers per player+chart, so
+  # the read-modify-write merge below cannot lose updates.
+  defp dual_write_score(
+         attempt_doc,
+         game_version,
+         ddr_id,
+         playstyle,
+         mcode,
+         difficulty,
+         rank,
+         lamp,
+         score,
+         exscore,
+         flare_force
+       ) do
+    DB.insert("ddr_scores", attempt_doc)
+
+    conds = %{"ddr_id" => ddr_id, "mcode" => mcode, "difficulty" => difficulty}
+    best = DB.get("ddr_scores_best", conds) || %{}
+
+    best_score_data = %{
+      "game_version" => game_version,
+      "ddr_id" => ddr_id,
+      "playstyle" => playstyle,
+      "mcode" => mcode,
+      "difficulty" => difficulty,
+      "rank" => min(rank, Map.get(best, "rank", rank)),
+      "lamp" => max(lamp, Map.get(best, "lamp", lamp)),
+      "score" => max(score, Map.get(best, "score", score)),
+      "exscore" => max(exscore, Map.get(best, "exscore", exscore)),
+      "flare_force" => max(flare_force, Map.get(best, "flare_force", flare_force))
+    }
+
+    ghostid =
+      "ddr_scores"
+      |> search_ordered(fn doc ->
+        Map.get(doc, "ddr_id") == ddr_id and Map.get(doc, "mcode") == mcode and
+          Map.get(doc, "difficulty") == difficulty and
+          Map.get(doc, "score") == max(score, Map.get(best, "score", score))
+      end)
+      |> List.first()
+
+    best_score_data =
+      case ghostid do
+        {id, _doc} -> Map.put(best_score_data, "ghostid", id)
+        nil -> Map.put(best_score_data, "ghostid", -1)
+      end
+
+    DB.upsert("ddr_scores_best", best_score_data, conds)
+  end
 
   # mcode -> ordered [{difficulty, score_str}] pairs, mirroring the Python
   # dict-of-dicts accumulation (insertion order preserved)

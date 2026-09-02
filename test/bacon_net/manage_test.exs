@@ -175,7 +175,7 @@ defmodule BaconNet.ManageTest do
     conn = call(:get, "/manage/api/shops")
     refute json(conn)["shops"] |> Enum.any?(&(&1["pcbid"] == "SHOPTESTPCBID01"))
   after
-    DB.drop_table("shop")
+    BaconNet.Tenancy.delete("SHOPTESTPCBID01")
   end
 
   test "user ban management" do

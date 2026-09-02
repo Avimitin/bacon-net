@@ -1,7 +1,7 @@
 defmodule BaconNet.Modules.Gitadora.Gameend do
   @moduledoc "Port of modules/gitadora/gameend.py."
 
-  alias BaconNet.{Core, DB, E, XNode}
+  alias BaconNet.{Core, DB, E, Scores, XNode}
 
   def routes do
     %{
@@ -32,44 +32,54 @@ defmodule BaconNet.Modules.Gitadora.Gameend do
 
     players = XNode.children(root, "player")
 
-    no =
-      Enum.reduce(players, nil, fn player, _no ->
+    {no, failed} =
+      Enum.reduce(players, {nil, false}, fn player, {_no, failed} ->
         no = XNode.attr_int(player, "no")
 
-        if XNode.attr(player, "card") == "use" do
-          save_player(root, player, g, game_version)
-        end
+        failed =
+          if XNode.attr(player, "card") == "use" do
+            case save_player(root, player, g, game_version, ver, info) do
+              :ok -> failed
+              {:error, _reason} -> true
+            end
+          else
+            failed
+          end
 
-        no
+        {no, failed}
       end)
 
-    response =
-      E.e(
-        "response",
-        E.e("#{ver}_gameend", [
-          E.e("gamemode", mode: "game_mode"),
-          E.e(
-            "player",
-            [
-              E.e("skill", [
-                E.e("rank", 1, __type: "s32"),
-                E.e("total_nr", 1, __type: "s32")
-              ]),
-              E.e("all_skill", [
-                E.e("rank", 1, __type: "s32"),
-                E.e("total_nr", 1, __type: "s32")
-              ])
-            ],
-            no: no,
-            state: 0
-          )
-        ])
-      )
+    if failed do
+      Core.reject_request(conn, info)
+    else
+      response =
+        E.e(
+          "response",
+          E.e("#{ver}_gameend", [
+            E.e("gamemode", mode: "game_mode"),
+            E.e(
+              "player",
+              [
+                E.e("skill", [
+                  E.e("rank", 1, __type: "s32"),
+                  E.e("total_nr", 1, __type: "s32")
+                ]),
+                E.e("all_skill", [
+                  E.e("rank", 1, __type: "s32"),
+                  E.e("total_nr", 1, __type: "s32")
+                ])
+              ],
+              no: no,
+              state: 0
+            )
+          ])
+        )
 
-    Core.send_response(conn, info, response)
+      Core.send_response(conn, info, response)
+    end
   end
 
-  defp save_player(root, player, g, game_version) do
+  defp save_player(root, player, g, game_version, ver, info) do
     dataid = player |> XNode.child("refid") |> Map.get(:text)
     profile = get_profile(dataid)
     gitadora_id = profile["gitadora_id"]
@@ -269,134 +279,228 @@ defmodule BaconNet.Modules.Gitadora.Gameend do
         Map.put(Map.get(profile, "version", %{}), version_key, game_profile)
       )
 
-    DB.upsert("gitadora_profile", profile, %{"card" => dataid})
-
     stages = XNode.children(player, "stage")
 
-    Enum.each(stages, fn s ->
-      data_version = root |> XNode.child("data_version") |> Map.get(:text)
-      timestamp = child_int(s, ["date_ms"])
-      musicid = child_int(s, ["musicid"])
-      seq = child_int(s, ["seq"])
-      skill = child_int(s, ["skill"])
-      new_skill = child_int(s, ["new_skill"])
-      clear = child_int(s, ["clear"])
-      auto_clear = child_int(s, ["auto_clear"])
-      fullcombo = child_int(s, ["fullcombo"])
-      excellent = child_int(s, ["excellent"])
-      medal = child_int(s, ["medal"])
-      perc = child_int(s, ["perc"])
-      new_perc = child_int(s, ["new_perc"])
-      rank = child_int(s, ["rank"])
-      score = child_int(s, ["score"])
-      combo = child_int(s, ["combo"])
-      max_combo_perc = child_int(s, ["max_combo_perc"])
-      flags = child_int(s, ["flags"])
-      phrase_combo_perc = child_int(s, ["phrase_combo_perc"])
-      perfect = child_int(s, ["perfect"])
-      great = child_int(s, ["great"])
-      good = child_int(s, ["good"])
-      ok = child_int(s, ["ok"])
-      miss = child_int(s, ["miss"])
-      perfect_perc = child_int(s, ["perfect_perc"])
-      great_perc = child_int(s, ["great_perc"])
-      good_perc = child_int(s, ["good_perc"])
-      ok_perc = child_int(s, ["ok_perc"])
-      miss_perc = child_int(s, ["miss_perc"])
-      meter = child_int(s, ["meter"])
-      meter_prog = child_int(s, ["meter_prog"])
-      before_meter = child_int(s, ["before_meter"])
-      before_meter_prog = child_int(s, ["before_meter_prog"])
-      is_new_meter = child_int(s, ["is_new_meter"])
-      phrase_data_num = child_int(s, ["phrase_data_num"])
-      phrase_addr = child_ints(s, ["phrase_addr"])
-      phrase_type = child_ints(s, ["phrase_type"])
-      phrase_status = child_ints(s, ["phrase_status"])
-      phrase_end_addr = child_int(s, ["phrase_end_addr"])
+    key = Scores.derive_key(g, "regist", gitadora_id, info.text)
 
-      DB.insert("#{g}_scores", %{
-        "timestamp" => timestamp,
-        "game_version" => game_version,
-        "gitadora_id" => gitadora_id,
-        "data_version" => data_version,
-        "musicid" => musicid,
-        "seq" => seq,
+    # One transaction per player: claim the idempotency key (a retry of the
+    # same gameend request replays with no duplicate effects), then save the
+    # profile and every stage's attempt/best/stats/outbox together.
+    try do
+      case DB.transaction(fn ->
+             case Scores.claim_idempotency(%{
+                    key: key,
+                    scope: "#{ver}_gameend.regist",
+                    payload_hash: Scores.hash_payload(info.text)
+                  }) do
+               :claimed ->
+                 DB.upsert("gitadora_profile", profile, %{"card" => dataid})
+                 Enum.each(stages, &save_stage(&1, root, g, gitadora_id, game_version))
+
+                 Scores.record_response!(key, %{
+                   "player" => gitadora_id,
+                   "stages" => length(stages)
+                 })
+
+                 :ok
+
+               {:replay, _response} ->
+                 :ok
+
+               :conflict ->
+                 DB.rollback(:idempotency_conflict)
+             end
+           end) do
+        {:ok, _} -> :ok
+        {:error, reason} -> {:error, reason}
+      end
+    rescue
+      e -> {:error, {:exception, e}}
+    end
+  end
+
+  defp save_stage(s, root, g, gitadora_id, game_version) do
+    data_version = root |> XNode.child("data_version") |> Map.get(:text)
+    timestamp = child_int(s, ["date_ms"])
+    musicid = child_int(s, ["musicid"])
+    seq = child_int(s, ["seq"])
+    skill = child_int(s, ["skill"])
+    new_skill = child_int(s, ["new_skill"])
+    clear = child_int(s, ["clear"])
+    auto_clear = child_int(s, ["auto_clear"])
+    fullcombo = child_int(s, ["fullcombo"])
+    excellent = child_int(s, ["excellent"])
+    medal = child_int(s, ["medal"])
+    perc = child_int(s, ["perc"])
+    new_perc = child_int(s, ["new_perc"])
+    rank = child_int(s, ["rank"])
+    score = child_int(s, ["score"])
+    combo = child_int(s, ["combo"])
+    max_combo_perc = child_int(s, ["max_combo_perc"])
+    flags = child_int(s, ["flags"])
+    phrase_combo_perc = child_int(s, ["phrase_combo_perc"])
+    perfect = child_int(s, ["perfect"])
+    great = child_int(s, ["great"])
+    good = child_int(s, ["good"])
+    ok = child_int(s, ["ok"])
+    miss = child_int(s, ["miss"])
+    perfect_perc = child_int(s, ["perfect_perc"])
+    great_perc = child_int(s, ["great_perc"])
+    good_perc = child_int(s, ["good_perc"])
+    ok_perc = child_int(s, ["ok_perc"])
+    miss_perc = child_int(s, ["miss_perc"])
+    meter = child_int(s, ["meter"])
+    meter_prog = child_int(s, ["meter_prog"])
+    before_meter = child_int(s, ["before_meter"])
+    before_meter_prog = child_int(s, ["before_meter_prog"])
+    is_new_meter = child_int(s, ["is_new_meter"])
+    phrase_data_num = child_int(s, ["phrase_data_num"])
+    phrase_addr = child_ints(s, ["phrase_addr"])
+    phrase_type = child_ints(s, ["phrase_type"])
+    phrase_status = child_ints(s, ["phrase_status"])
+    phrase_end_addr = child_int(s, ["phrase_end_addr"])
+
+    attempt_doc = %{
+      "timestamp" => timestamp,
+      "game_version" => game_version,
+      "gitadora_id" => gitadora_id,
+      "data_version" => data_version,
+      "musicid" => musicid,
+      "seq" => seq,
+      "skill" => skill,
+      "new_skill" => new_skill,
+      "clear" => clear,
+      "auto_clear" => auto_clear,
+      "fullcombo" => fullcombo,
+      "excellent" => excellent,
+      "medal" => medal,
+      "perc" => perc,
+      "new_perc" => new_perc,
+      "rank" => rank,
+      "score" => score,
+      "combo" => combo,
+      "max_combo_perc" => max_combo_perc,
+      "flags" => flags,
+      "phrase_combo_perc" => phrase_combo_perc,
+      "perfect" => perfect,
+      "great" => great,
+      "good" => good,
+      "ok" => ok,
+      "miss" => miss,
+      "perfect_perc" => perfect_perc,
+      "great_perc" => great_perc,
+      "good_perc" => good_perc,
+      "ok_perc" => ok_perc,
+      "miss_perc" => miss_perc,
+      "meter" => meter,
+      "meter_prog" => meter_prog,
+      "before_meter" => before_meter,
+      "before_meter_prog" => before_meter_prog,
+      "is_new_meter" => is_new_meter,
+      "phrase_data_num" => phrase_data_num,
+      "phrase_addr" => phrase_addr,
+      "phrase_type" => phrase_type,
+      "phrase_status" => phrase_status,
+      "phrase_end_addr" => phrase_end_addr
+    }
+
+    Scores.apply_attempt!(%{
+      game: g,
+      version: game_version,
+      player: to_string(gitadora_id),
+      song: musicid,
+      chart: seq,
+      play_style: "",
+      score: perc,
+      clear: clear,
+      miss: nil,
+      payload: %{
         "skill" => skill,
-        "new_skill" => new_skill,
-        "clear" => clear,
-        "auto_clear" => auto_clear,
         "fullcombo" => fullcombo,
         "excellent" => excellent,
-        "medal" => medal,
-        "perc" => perc,
-        "new_perc" => new_perc,
         "rank" => rank,
-        "score" => score,
-        "combo" => combo,
-        "max_combo_perc" => max_combo_perc,
-        "flags" => flags,
-        "phrase_combo_perc" => phrase_combo_perc,
-        "perfect" => perfect,
-        "great" => great,
-        "good" => good,
-        "ok" => ok,
-        "miss" => miss,
-        "perfect_perc" => perfect_perc,
-        "great_perc" => great_perc,
-        "good_perc" => good_perc,
-        "ok_perc" => ok_perc,
-        "miss_perc" => miss_perc,
         "meter" => meter,
-        "meter_prog" => meter_prog,
-        "before_meter" => before_meter,
-        "before_meter_prog" => before_meter_prog,
-        "is_new_meter" => is_new_meter,
-        "phrase_data_num" => phrase_data_num,
-        "phrase_addr" => phrase_addr,
-        "phrase_type" => phrase_type,
-        "phrase_status" => phrase_status,
-        "phrase_end_addr" => phrase_end_addr
-      })
+        "meter_prog" => meter_prog
+      },
+      attempt: attempt_doc,
+      stats: %{clear: clear == 1, fc: fullcombo == 1},
+      merge: Scores.Merge.spec(g),
+      idempotency: nil,
+      dual_write: fn _recorded ->
+        dual_write_stage(
+          g,
+          attempt_doc,
+          gitadora_id,
+          musicid,
+          seq,
+          skill,
+          clear,
+          fullcombo,
+          excellent,
+          perc,
+          rank,
+          meter,
+          meter_prog
+        )
+      end
+    })
+  end
 
-      best_score =
-        DB.get("#{g}_scores_best", %{
-          "gitadora_id" => gitadora_id,
-          "musicid" => musicid,
-          "seq" => seq
-        }) || %{}
+  # Project the recorded stage into the legacy document tables, in the same
+  # transaction. gitadora gametop/api modules still read those; the
+  # relational best_scores row lock serializes writers per player+chart.
+  defp dual_write_stage(
+         g,
+         attempt_doc,
+         gitadora_id,
+         musicid,
+         seq,
+         skill,
+         clear,
+         fullcombo,
+         excellent,
+         perc,
+         rank,
+         meter,
+         meter_prog
+       ) do
+    DB.insert("#{g}_scores", attempt_doc)
 
-      best_perc = Map.get(best_score, "perc", perc)
+    best_conds = %{
+      "gitadora_id" => gitadora_id,
+      "musicid" => musicid,
+      "seq" => seq
+    }
 
-      best_score_data = %{
-        "gitadora_id" => gitadora_id,
-        "musicid" => musicid,
-        "seq" => seq,
-        "skill" => max(skill, Map.get(best_score, "skill", skill)),
-        "clear" => max(clear, Map.get(best_score, "clear", clear)),
-        "fullcombo" => max(fullcombo, Map.get(best_score, "fullcombo", fullcombo)),
-        "excellent" => max(excellent, Map.get(best_score, "excellent", excellent)),
-        "perc" => max(perc, Map.get(best_score, "perc", perc)),
-        "rank" => max(rank, Map.get(best_score, "rank", rank)),
-        "meter" =>
-          if perc >= best_perc do
-            meter
-          else
-            Map.get(best_score, "meter", meter)
-          end,
-        "meter_prog" =>
-          if perc >= best_perc do
-            meter_prog
-          else
-            Map.get(best_score, "meter_prog", meter_prog)
-          end
-      }
+    best_score = DB.get("#{g}_scores_best", best_conds) || %{}
 
-      DB.upsert("#{g}_scores_best", best_score_data, %{
-        "gitadora_id" => gitadora_id,
-        "musicid" => musicid,
-        "seq" => seq
-      })
-    end)
+    best_perc = Map.get(best_score, "perc", perc)
+
+    best_score_data = %{
+      "gitadora_id" => gitadora_id,
+      "musicid" => musicid,
+      "seq" => seq,
+      "skill" => max(skill, Map.get(best_score, "skill", skill)),
+      "clear" => max(clear, Map.get(best_score, "clear", clear)),
+      "fullcombo" => max(fullcombo, Map.get(best_score, "fullcombo", fullcombo)),
+      "excellent" => max(excellent, Map.get(best_score, "excellent", excellent)),
+      "perc" => max(perc, Map.get(best_score, "perc", perc)),
+      "rank" => max(rank, Map.get(best_score, "rank", rank)),
+      "meter" =>
+        if perc >= best_perc do
+          meter
+        else
+          Map.get(best_score, "meter", meter)
+        end,
+      "meter_prog" =>
+        if perc >= best_perc do
+          meter_prog
+        else
+          Map.get(best_score, "meter_prog", meter_prog)
+        end
+    }
+
+    DB.upsert("#{g}_scores_best", best_score_data, best_conds)
   end
 
   defp put_game(game_profile, g, key, value) do
