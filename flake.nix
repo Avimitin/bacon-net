@@ -10,8 +10,10 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
-        beam = pkgs.beam27Packages;
-        elixir = beam.elixir_1_18;
+        beam = pkgs.beam27Packages.overrideScope (final: prev: {
+          elixir = prev.elixir_1_18;
+        });
+        elixir = beam.elixir;
         erlang = beam.erlang;
       in
       {
@@ -32,33 +34,20 @@
           '';
         };
 
-        packages.default = pkgs.stdenv.mkDerivation {
+        packages.default = beam.mixRelease {
           pname = "bacon-net";
           version = "0.1.0";
           src = ./.;
 
-          nativeBuildInputs = [ elixir erlang pkgs.git ];
+          # keep releases/COOKIE so the server starts without extra env vars
+          removeCookie = false;
 
-          HOME = ".";
-          MIX_ENV = "prod";
-
-          buildPhase = ''
-            runHook preBuild
-            export MIX_HOME="$PWD/.mix"
-            export HEX_HOME="$PWD/.hex"
-            mix local.hex --force
-            mix local.rebar --force
-            mix deps.get
-            mix compile
-            runHook postBuild
-          '';
-
-          installPhase = ''
-            runHook preInstall
-            mkdir -p $out
-            cp -r . $out/
-            runHook postInstall
-          '';
+          mixFodDeps = beam.fetchMixDeps {
+            pname = "bacon-net-deps";
+            version = "0.1.0";
+            src = ./.;
+            hash = "sha256-pb3Oz5ViTc9za6Fg45yEaH3N9eM3NzP5DdVLj/W/k7w=";
+          };
         };
       });
 }
