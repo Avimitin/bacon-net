@@ -26,7 +26,10 @@ defmodule BaconNet.Plugs.CORS do
           "access-control-allow-methods",
           "GET, POST, PUT, PATCH, DELETE, OPTIONS"
         )
-        |> put_resp_header("access-control-allow-headers", "authorization, content-type")
+        |> put_resp_header(
+          "access-control-allow-headers",
+          "authorization, content-type, x-csrf-requested-with"
+        )
         |> put_resp_header("vary", "origin")
       else
         conn

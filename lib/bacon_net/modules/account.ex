@@ -7,8 +7,12 @@ defmodule BaconNet.Modules.Account do
   `accounts`/`account_sessions`/`account_cards` tables via
   `BaconNet.Accounts`; uniqueness and ownership are enforced by database
   constraints, so concurrent registrations and card binds cannot race.
-  Authentication is `Authorization: Bearer <token>`; sessions store only
-  the SHA-256 digest of the token.
+  Authentication is `Authorization: Bearer <token>` or the HttpOnly
+  `bacon_session` cookie set at login/register; sessions store only the
+  SHA-256 digest of the token. Cookie-authenticated mutating requests must
+  also carry the custom `X-CSRF-Requested-With` header (a cross-site form
+  cannot set it); header-authenticated requests are exempt because the
+  browser never attaches them on its own.
 
   Game profiles and scores stay JSONB documents in the `documents` table
   (game-defined shapes), but every per-user lookup filters by the owner's
@@ -27,7 +31,14 @@ defmodule BaconNet.Modules.Account do
   """
 
   import Ecto.Query
-  import Plug.Conn, only: [fetch_query_params: 1, get_req_header: 2, send_resp: 3]
+
+  import Plug.Conn,
+    only: [
+      fetch_cookies: 1,
+      fetch_query_params: 1,
+      get_req_header: 2,
+      send_resp: 3
+    ]
 
   alias BaconNet.{Accounts, Api, Card, DB}
   alias BaconNet.Accounts.Account
@@ -37,6 +48,10 @@ defmodule BaconNet.Modules.Account do
   @max_password_bytes 1024
   @default_limit 50
   @max_limit 200
+  @default_session_ttl_seconds 30 * 24 * 3600
+  @session_cookie "bacon_session"
+  @csrf_header "x-csrf-requested-with"
+  @mutating_methods ~w(POST PUT PATCH DELETE)
 
   # Editable top-level profile fields for PATCH. Never `_id`, `card`, the
   # game's id field, or anything credential-shaped; everything else the
@@ -228,6 +243,7 @@ defmodule BaconNet.Modules.Account do
       case Accounts.register(username, password) do
         {:ok, _account, token, expires_at} ->
           conn
+          |> put_session_cookie(token)
           |> Plug.Conn.put_resp_content_type("application/json")
           |> send_resp(201, Jason.encode!(session_response(token, expires_at, username)))
 
@@ -255,7 +271,10 @@ defmodule BaconNet.Modules.Account do
       else
         Accounts.purge_expired_sessions()
         {token, expires_at} = Accounts.create_session(account)
-        Api.json(conn, session_response(token, expires_at, account.username))
+
+        conn
+        |> put_session_cookie(token)
+        |> Api.json(session_response(token, expires_at, account.username))
       end
     else
       _ -> Api.error(conn, 401, "invalid_credentials")
@@ -263,6 +282,10 @@ defmodule BaconNet.Modules.Account do
   end
 
   def account_logout(conn, _params) do
+    # Clear the cookie regardless of how the auth check ends — a dead token
+    # should not leave a stale cookie behind.
+    conn = clear_session_cookie(conn)
+
     with_auth(conn, fn _account, digest ->
       Accounts.revoke_session(digest)
       send_resp(conn, 204, "")
@@ -686,13 +709,55 @@ defmodule BaconNet.Modules.Account do
 
   ## Auth plumbing
 
+  # Bearer header wins (non-browser clients; exempt from the CSRF header
+  # rule). Otherwise fall back to the HttpOnly session cookie, which for
+  # mutating methods additionally requires the custom CSRF header.
   defp with_auth(conn, fun) do
-    with ["Bearer " <> token] <- get_req_header(conn, "authorization"),
-         {:ok, account, digest} <- Accounts.authenticate_token(token) do
-      fun.(account, digest)
+    case get_req_header(conn, "authorization") do
+      ["Bearer " <> token] ->
+        authenticate(conn, token, fun)
+
+      _ ->
+        cookie_auth(conn, fun)
+    end
+  end
+
+  defp cookie_auth(conn, fun) do
+    conn = fetch_cookies(conn)
+
+    if conn.method in @mutating_methods and get_req_header(conn, @csrf_header) == [] do
+      Api.error(conn, 403, "csrf_header_required")
     else
+      case conn.req_cookies[@session_cookie] do
+        token when is_binary(token) -> authenticate(conn, token, fun)
+        _ -> Api.error(conn, 401, "unauthorized")
+      end
+    end
+  end
+
+  defp authenticate(conn, token, fun) do
+    case Accounts.authenticate_token(token) do
+      {:ok, account, digest} -> fun.(account, digest)
       _ -> Api.error(conn, 401, "unauthorized")
     end
+  end
+
+  defp put_session_cookie(conn, token) do
+    Plug.Conn.put_resp_cookie(conn, @session_cookie, token,
+      http_only: true,
+      same_site: "Strict",
+      path: "/",
+      secure: conn.scheme == :https,
+      max_age: session_ttl_seconds()
+    )
+  end
+
+  defp clear_session_cookie(conn) do
+    Plug.Conn.delete_resp_cookie(conn, @session_cookie, path: "/")
+  end
+
+  defp session_ttl_seconds do
+    Application.get_env(:bacon_net, :account_session_ttl_seconds, @default_session_ttl_seconds)
   end
 
   defp session_response(token, expires_at, username) do
@@ -703,6 +768,7 @@ defmodule BaconNet.Modules.Account do
     %{
       "username" => account.username,
       "display_name" => account.display_name,
+      "admin" => account.admin == true,
       "cards" => Accounts.list_card_uids(account.id),
       "created_at" => DateTime.to_unix(account.inserted_at)
     }

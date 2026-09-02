@@ -41,12 +41,51 @@ defmodule BaconNet.Scores.Merge do
       payload_follow_score: ["gauge_type", "ghost", "ghost_gauge"],
       payload_overwrite: ["game_version", "pid"]
     },
+    # Legacy IIDX (the shared `music` module, versions <= 20): the miss rule
+    # also looks at the new play's clear flag, and ghost_gauge/gauge_type are
+    # carried from the old best (unlisted payload keys never change).
+    "iidx_legacy" => %{
+      miss: :iidx_legacy,
+      payload_max: [],
+      payload_min: [],
+      payload_follow_score: ["ghost"],
+      payload_overwrite: ["game_version", "pid"]
+    },
     "ddr" => %{
       miss: :ignore,
       payload_max: ["exscore", "flare_force"],
       payload_min: ["rank"],
       payload_follow_score: ["ghost", "ghostsize"],
       payload_overwrite: ["game_version", "playstyle"]
+    },
+    # DDR A20/A3 (playerdata/playerdata_2 usersave): no flare force yet.
+    "ddr_legacy" => %{
+      miss: :ignore,
+      payload_max: ["exscore"],
+      payload_min: ["rank"],
+      payload_follow_score: ["ghost", "ghostsize"],
+      payload_overwrite: ["game_version", "playstyle"]
+    },
+    "sdvx" => %{
+      miss: :ignore,
+      payload_max: ["btn_rate", "exscore", "long_rate", "score_grade", "vol_rate"],
+      payload_min: [],
+      payload_follow_score: [],
+      payload_overwrite: ["game_version", "name"]
+    },
+    "drs" => %{
+      miss: :ignore,
+      payload_max: ["combo", "rank"],
+      payload_min: [],
+      payload_follow_score: [],
+      payload_overwrite: ["game_version", "name", "param"]
+    },
+    "nostalgia" => %{
+      miss: :ignore,
+      payload_max: ["clear_flag", "grade", "hands_mode"],
+      payload_min: [],
+      payload_follow_score: [],
+      payload_overwrite: ["clear_count", "game_version", "multi_count", "play_count"]
     },
     "guitarfreaks" => @gitadora,
     "drummania" => @gitadora
@@ -71,15 +110,29 @@ defmodule BaconNet.Scores.Merge do
     %{
       score: max(old.score, new.score),
       clear: max(old.clear, new.clear),
-      miss: merge_miss(spec.miss, old.miss, new.miss),
+      miss: merge_miss(spec.miss, old, new),
       payload: merge_payload(spec, old, new)
     }
   end
 
-  defp merge_miss(:iidx, old, new) when old == -1 or new == -1, do: max(old, new)
-  defp merge_miss(:iidx, old, new), do: min(old, new)
-  defp merge_miss(:least, old, new), do: min(old, new)
-  defp merge_miss(:ignore, old, _new), do: old
+  defp merge_miss(:iidx, old, new) when old.miss == -1 or new.miss == -1 do
+    max(old.miss, new.miss)
+  end
+
+  defp merge_miss(:iidx, old, new), do: min(old.miss, new.miss)
+
+  # Legacy IIDX: -1 in the stored best adopts the new value; a clear takes
+  # the min; otherwise the stored best stands.
+  defp merge_miss(:iidx_legacy, old, new) do
+    cond do
+      old.miss == -1 -> new.miss
+      new.clear > 2 -> min(old.miss, new.miss)
+      true -> old.miss
+    end
+  end
+
+  defp merge_miss(:least, old, new), do: min(old.miss, new.miss)
+  defp merge_miss(:ignore, old, _new), do: old.miss
 
   defp merge_payload(spec, old, new) do
     old_p = old.payload
@@ -106,6 +159,12 @@ defmodule BaconNet.Scores.Merge do
     "CASE WHEN best_scores.miss = -1 OR excluded.miss = -1 " <>
       "THEN greatest(best_scores.miss, excluded.miss) " <>
       "ELSE least(best_scores.miss, excluded.miss) END"
+  end
+
+  def miss_sql(:iidx_legacy) do
+    "CASE WHEN best_scores.miss = -1 THEN excluded.miss " <>
+      "WHEN excluded.clear > 2 THEN least(best_scores.miss, excluded.miss) " <>
+      "ELSE best_scores.miss END"
   end
 
   def miss_sql(:least), do: "least(best_scores.miss, excluded.miss)"

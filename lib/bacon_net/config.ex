@@ -23,6 +23,15 @@ defmodule BaconNet.Config do
   end
 
   def port, do: Application.get_env(:bacon_net, :port, 8000)
+
+  @doc """
+  Canonical base URL advertised to cabinets in services.get. Never derived
+  from the request Host header. Defaults to http on the configured ip/port;
+  set BACON_PUBLIC_URL in production (e.g. the TLS gateway URL).
+  """
+  def public_url do
+    Application.get_env(:bacon_net, :public_url) || "http://#{ip()}:#{port()}"
+  end
   def response_compression, do: Application.get_env(:bacon_net, :response_compression, false)
   def verbose_log, do: Application.get_env(:bacon_net, :verbose_log, true)
   def arcade, do: Application.get_env(:bacon_net, :arcade, @default_arcade)

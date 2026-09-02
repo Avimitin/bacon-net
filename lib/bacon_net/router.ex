@@ -5,6 +5,8 @@ defmodule BaconNet.Router do
 
   use Plug.Router
 
+  require Logger
+
   alias BaconNet.{Card, Config, Core, E, Registry}
 
   plug(:match)
@@ -14,6 +16,8 @@ defmodule BaconNet.Router do
   plug(BaconNet.Plugs.Metrics)
 
   plug(BaconNet.Plugs.CORS)
+
+  plug(BaconNet.Plugs.SecurityHeaders)
 
   plug(BaconNet.Plugs.Webui)
 
@@ -213,7 +217,7 @@ defmodule BaconNet.Router do
     {info, conn} = Core.process_request(conn)
     params = conn.query_params
 
-    request_address = "#{conn.host}:#{conn.port}:#{Config.port()}"
+    base = Config.public_url()
 
     url_slashless =
       params["f"] == "services.get" or
@@ -222,7 +226,7 @@ defmodule BaconNet.Router do
     items =
       for %{tag: tag, prefix: prefix} <- Registry.services() do
         pre = if url_slashless, do: "/fwdr", else: prefix
-        E.e("item", name: tag, url: "http://#{request_address}#{pre}")
+        E.e("item", name: tag, url: "#{base}#{pre}")
       end
 
     keepalive_params = [
@@ -262,6 +266,9 @@ defmodule BaconNet.Router do
           Registry.dispatch_by_name(conn, "ddr_#{module}_#{method}")
 
         game_code == "REC" ->
+          # DRS routes register the two {player} variants under one handler
+          # named without the numeric suffix (see Drs.Game.routes/0).
+          method = String.replace(method, ~r/_[12]$/, "")
           Registry.dispatch_by_name(conn, "drs_#{module}_#{method}")
 
         game_code == "KFC" and module == "eventlog" ->
@@ -290,7 +297,8 @@ defmodule BaconNet.Router do
 
     case result do
       :not_found ->
-        IO.puts("Try URL Slash 1 (On) if this game is supported.")
+        Logger.info("unrouted game request; try URL Slash 1 (On) if this game is supported")
+
         send_resp(conn, 404, "")
 
       conn ->

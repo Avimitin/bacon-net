@@ -23,7 +23,7 @@ defmodule BaconNet.AccountTest do
     DB.drop_table("test_profile")
   end
 
-  defp call(method, path, body \\ nil, token \\ nil) do
+  defp call(method, path, body \\ nil, token \\ nil, opts \\ []) do
     conn =
       if body do
         conn(method, path, Jason.encode!(body))
@@ -35,7 +35,24 @@ defmodule BaconNet.AccountTest do
     conn =
       if token, do: Plug.Conn.put_req_header(conn, "authorization", "Bearer #{token}"), else: conn
 
+    conn =
+      if opts[:cookie],
+        do: put_req_cookie(conn, "bacon_session", opts[:cookie]),
+        else: conn
+
+    conn =
+      if opts[:csrf],
+        do: Plug.Conn.put_req_header(conn, "x-csrf-requested-with", "fetch"),
+        else: conn
+
     BaconNet.Router.call(conn, BaconNet.Router.init([]))
+  end
+
+  defp set_cookie(conn, name) do
+    conn.resp_headers
+    |> Enum.filter(fn {k, _} -> k == "set-cookie" end)
+    |> Enum.map(fn {_, v} -> v end)
+    |> Enum.find("", &String.starts_with?(&1, "#{name}="))
   end
 
   defp json(conn), do: Jason.decode!(conn.resp_body)
@@ -74,6 +91,81 @@ defmodule BaconNet.AccountTest do
 
     assert call(:post, "/account/api/logout", nil, token).status == 204
     assert call(:get, "/account/api/me", nil, token).status == 401
+  end
+
+  test "login and register set an HttpOnly session cookie" do
+    conn = register()
+    cookie = set_cookie(conn, "bacon_session")
+    assert cookie =~ "HttpOnly"
+    assert cookie =~ "SameSite=Strict"
+    assert cookie =~ "path=/"
+    refute cookie =~ "secure"
+
+    conn =
+      call(:post, "/account/api/login", %{"username" => "player1", "password" => "password123"})
+
+    assert set_cookie(conn, "bacon_session") =~ "HttpOnly"
+  end
+
+  test "cookie-authenticated requests work; mutations require the CSRF header" do
+    %{"token" => token} = json(register())
+
+    # cookie alone authenticates safe methods
+    conn = call(:get, "/account/api/me", nil, nil, cookie: token)
+    assert conn.status == 200
+    assert json(conn)["username"] == "player1"
+
+    # a mutating request with only the cookie is rejected
+    conn = call(:post, "/account/api/cards", %{"card" => @card_uid}, nil, cookie: token)
+    assert conn.status == 403
+    assert %{"error" => "csrf_header_required"} = json(conn)
+
+    # with the CSRF header the same request goes through
+    conn =
+      call(:post, "/account/api/cards", %{"card" => @card_uid}, nil,
+        cookie: token,
+        csrf: true
+      )
+
+    assert conn.status == 200
+    assert %{"cards" => [@card_uid]} = json(conn)
+
+    # cookie + header also authenticates non-mutating routes
+    assert call(:get, "/account/api/profiles", nil, nil, cookie: token, csrf: true).status == 200
+
+    # header auth stays exempt from the CSRF rule
+    assert call(:post, "/account/api/cards", %{"card" => "E004001111111111"}, token).status == 200
+
+    # an unknown cookie is still just unauthorized
+    assert call(:get, "/account/api/me", nil, nil, cookie: "bogus").status == 401
+  end
+
+  test "logout revokes the session and clears the cookie" do
+    %{"token" => token} = json(register())
+
+    conn = call(:post, "/account/api/logout", nil, nil, cookie: token, csrf: true)
+    assert conn.status == 204
+
+    cleared = set_cookie(conn, "bacon_session")
+    assert cleared =~ "max-age=0"
+
+    # the cookie no longer authenticates
+    assert call(:get, "/account/api/me", nil, nil, cookie: token).status == 401
+  end
+
+  test "me exposes the admin flag" do
+    %{"token" => token} = json(register())
+
+    conn = call(:get, "/account/api/me", nil, token)
+    assert json(conn)["admin"] == false
+
+    "player1"
+    |> Accounts.get_by_username()
+    |> Ecto.Changeset.change(admin: true)
+    |> Repo.update!()
+
+    conn = call(:get, "/account/api/me", nil, token)
+    assert json(conn)["admin"] == true
   end
 
   test "sessions store only the token digest; revoked and expired tokens are rejected" do

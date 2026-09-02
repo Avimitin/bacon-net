@@ -2,11 +2,7 @@ defmodule BaconNet.Modules.Iidx.Iidx32music do
   @moduledoc "Port of modules/iidx/iidx32music.py."
 
   alias BaconNet.{Config, Core, DB, E, XNode}
-
-  # ClearFlags: NO_PLAY 0, FAILED 1, ASSIST_CLEAR 2, EASY_CLEAR 3, CLEAR 4,
-  # HARD_CLEAR 5, EX_HARD_CLEAR 6, FULL_COMBO 7
-  @easy_clear 3
-  @full_combo 7
+  alias BaconNet.Modules.Iidx.ScoreSave
 
   def routes do
     %{
@@ -238,7 +234,7 @@ defmodule BaconNet.Modules.Iidx.Iidx32music do
     ghost = log |> XNode.child("ghost") |> text()
     ghost_gauge = log |> XNode.child("ghost_gauge") |> text()
 
-    DB.insert("iidx_scores", %{
+    attempt_doc = %{
       "timestamp" => timestamp,
       "game_version" => game_version,
       "iidx_id" => iidx_id,
@@ -260,90 +256,52 @@ defmodule BaconNet.Modules.Iidx.Iidx32music do
       "option2" => option2,
       "ghost" => ghost,
       "ghost_gauge" => ghost_gauge
-    })
-
-    best_conds = %{
-      "iidx_id" => iidx_id,
-      "play_style" => play_style,
-      "music_id" => music_id,
-      "chart_id" => note_id
     }
 
-    best_score = DB.get("iidx_scores_best", best_conds) || %{}
-
-    best_miss_count = Map.get(best_score, "miss_count", miss_num)
-
-    miss_count =
-      if best_miss_count == -1 or miss_num == -1 do
-        max(miss_num, best_miss_count)
-      else
-        min(miss_num, best_miss_count)
-      end
-
-    best_ex_score = Map.get(best_score, "ex_score", ex_score)
-
-    best_score_data = %{
-      "game_version" => game_version,
-      "iidx_id" => iidx_id,
-      "pid" => pid,
-      "play_style" => play_style,
-      "music_id" => music_id,
-      "chart_id" => note_id,
-      "miss_count" => miss_count,
-      "ex_score" => max(ex_score, best_ex_score),
-      "ghost" =>
-        if(ex_score >= best_ex_score, do: ghost, else: Map.get(best_score, "ghost", ghost)),
-      "ghost_gauge" =>
-        if(ex_score >= best_ex_score,
-          do: ghost_gauge,
-          else: Map.get(best_score, "ghost_gauge", ghost_gauge)
-        ),
-      "clear_flg" => max(clear_flg, Map.get(best_score, "clear_flg", clear_flg)),
-      "gauge_type" =>
-        if(ex_score >= best_ex_score,
-          do: gauge_type,
-          else: Map.get(best_score, "gauge_type", gauge_type)
+    case ScoreSave.save(info, %{
+           game_version: game_version,
+           iidx_id: iidx_id,
+           pid: pid,
+           play_style: play_style,
+           music_id: music_id,
+           note_id: note_id,
+           clear_flg: clear_flg,
+           ex_score: ex_score,
+           miss_num: miss_num,
+           ghost: ghost,
+           ghost_gauge: ghost_gauge,
+           gauge_type: gauge_type,
+           attempt_doc: attempt_doc
+         }) do
+      {:ok, score_stats} ->
+        send_reg_response(
+          conn,
+          info,
+          game_version,
+          iidx_id,
+          play_style,
+          music_id,
+          note_id,
+          clid,
+          score_stats
         )
-    }
 
-    DB.upsert("iidx_scores_best", best_score_data, best_conds)
+      {:error, _reason} ->
+        Core.reject_request(conn, info)
+    end
+  end
 
-    stats_conds = %{
-      "music_id" => music_id,
-      "play_style" => play_style,
-      "chart_id" => note_id
-    }
-
-    score_stats = DB.get("iidx_score_stats", stats_conds) || %{}
-
-    score_stats =
-      score_stats
-      |> Map.put("game_version", game_version)
-      |> Map.put("play_style", play_style)
-      |> Map.put("music_id", music_id)
-      |> Map.put("chart_id", note_id)
-      |> Map.put("play_count", Map.get(score_stats, "play_count", 0) + 1)
-      |> Map.put(
-        "fc_count",
-        Map.get(score_stats, "fc_count", 0) + if(clear_flg == @full_combo, do: 1, else: 0)
-      )
-      |> Map.put(
-        "clear_count",
-        Map.get(score_stats, "clear_count", 0) + if(clear_flg >= @easy_clear, do: 1, else: 0)
-      )
-
-    score_stats =
-      score_stats
-      |> Map.put(
-        "fc_rate",
-        trunc(score_stats["fc_count"] / score_stats["play_count"] * 1000)
-      )
-      |> Map.put(
-        "clear_rate",
-        trunc(score_stats["clear_count"] / score_stats["play_count"] * 1000)
-      )
-
-    DB.upsert("iidx_score_stats", score_stats, stats_conds)
+  defp send_reg_response(
+         conn,
+         info,
+         game_version,
+         iidx_id,
+         play_style,
+         music_id,
+         note_id,
+         clid,
+         score_stats
+       ) do
 
     ranklist_scores =
       DB.search("iidx_scores_best", %{

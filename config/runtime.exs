@@ -47,6 +47,10 @@ if config_env() == :prod do
     config :bacon_net, admin_token: admin_token
   end
 
+  if public_url = System.get_env("BACON_PUBLIC_URL") do
+    config :bacon_net, public_url: public_url
+  end
+
   if max_decompressed = System.get_env("BACON_MAX_DECOMPRESSED_BODY") do
     config :bacon_net, max_decompressed_body: String.to_integer(max_decompressed)
   end

@@ -20,8 +20,8 @@ defmodule BaconNet.Modules.Drs.Game do
         {"game", "lock_multi_login_2", :drs_game_lock_multi_login},
         {"game", "sign_up_1", :drs_game_sign_up},
         {"game", "sign_up_2", :drs_game_sign_up},
-        {"game", "get_musicscore_1", :drs_get_musicscore},
-        {"game", "get_musicscore_2", :drs_get_musicscore},
+        {"game", "get_musicscore_1", :drs_game_get_musicscore},
+        {"game", "get_musicscore_2", :drs_game_get_musicscore},
         {"game", "save_musicscore", :drs_save_musicscore},
         # the Python file defines drs_save_musicscore twice; the second def
         # (save_playdata) is renamed here since Elixir has no shadowing
@@ -327,7 +327,7 @@ defmodule BaconNet.Modules.Drs.Game do
     Core.send_response(conn, info, response)
   end
 
-  def drs_get_musicscore(conn) do
+  def drs_game_get_musicscore(conn) do
     {info, conn} = Core.process_request(conn)
     game_version = info.game_version
 

@@ -26,7 +26,8 @@ defmodule BaconNet.MixProject do
       {:jason, "~> 1.4"},
       {:ecto_sql, "~> 3.12"},
       {:postgrex, ">= 0.0.0"},
-      {:telemetry_metrics, "~> 1.0"}
+      {:telemetry_metrics, "~> 1.0"},
+      {:stream_data, "~> 1.2", only: :test}
     ]
   end
 
