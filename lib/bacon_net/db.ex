@@ -31,6 +31,13 @@ defmodule BaconNet.DB do
   @doc "All documents in `table`."
   def all(table), do: GenServer.call(__MODULE__, {:all, table})
 
+  @doc "All documents in `table` matching all conditions, as {doc_id, doc} pairs."
+  def search_with_ids(table, conds) when is_map(conds),
+    do: GenServer.call(__MODULE__, {:search_with_ids, table, conds})
+
+  @doc "Drop an entire table."
+  def drop_table(table), do: GenServer.call(__MODULE__, {:drop_table, table})
+
   @doc "Insert a document. Returns the document."
   def insert(table, doc) when is_map(doc), do: GenServer.call(__MODULE__, {:insert, table, doc})
 
@@ -87,6 +94,22 @@ defmodule BaconNet.DB do
 
   def handle_call({:all, table}, _from, data) do
     {:reply, data |> Map.get(table, %{}) |> sorted_docs(), data}
+  end
+
+  def handle_call({:search_with_ids, table, conds}, _from, data) do
+    result =
+      data
+      |> Map.get(table, %{})
+      |> sorted_pairs()
+      |> Enum.filter(fn {_id, d} -> matches?(d, conds) end)
+
+    {:reply, result, data}
+  end
+
+  def handle_call({:drop_table, table}, _from, data) do
+    data = Map.delete(data, table)
+    persist(data)
+    {:reply, :ok, data}
   end
 
   def handle_call({:insert, table, doc}, _from, data) do
@@ -146,14 +169,18 @@ defmodule BaconNet.DB do
 
   # TinyDB iterates documents in insertion order, which matches ascending
   # numeric document ids.
-  defp sorted_docs(docs) do
-    docs
-    |> Enum.sort_by(fn {id, _doc} ->
+  defp sorted_pairs(docs) do
+    Enum.sort_by(docs, fn {id, _doc} ->
       case Integer.parse(id) do
         {n, _} -> n
         :error -> 0
       end
     end)
+  end
+
+  defp sorted_docs(docs) do
+    docs
+    |> sorted_pairs()
     |> Enum.map(fn {_id, doc} -> doc end)
   end
 
