@@ -22,6 +22,7 @@
             elixir
             erlang
             git
+            nodejs_22
           ];
 
           shellHook = ''
