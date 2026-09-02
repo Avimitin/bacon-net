@@ -29,4 +29,8 @@ if config_env() == :prod do
   if paseli = System.get_env("BACON_PASELI") do
     config :bacon_net, paseli: String.to_integer(paseli)
   end
+
+  if webui_dir = System.get_env("BACON_WEBUI_DIR") do
+    config :bacon_net, webui_dir: webui_dir
+  end
 end

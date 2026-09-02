@@ -13,6 +13,12 @@ defmodule BaconNet.Config do
     Application.get_env(:bacon_net, :ip) || detect_ip()
   end
 
+  @doc "Directory the static webui is served from (priv/static unless overridden)."
+  def webui_dir do
+    Application.get_env(:bacon_net, :webui_dir) ||
+      Path.join(:code.priv_dir(:bacon_net) |> to_string(), "static")
+  end
+
   def port, do: Application.get_env(:bacon_net, :port, 8000)
   def response_compression, do: Application.get_env(:bacon_net, :response_compression, false)
   def verbose_log, do: Application.get_env(:bacon_net, :verbose_log, true)

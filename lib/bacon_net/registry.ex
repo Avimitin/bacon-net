@@ -104,7 +104,9 @@ defmodule BaconNet.Registry do
     BaconNet.Modules.Drs.Game,
     # nostalgia
     BaconNet.Modules.Nostalgia.Op3Common,
-    BaconNet.Modules.Nostalgia.Op3Player
+    BaconNet.Modules.Nostalgia.Op3Player,
+    # management API (webui)
+    BaconNet.Modules.Manage
   ]
 
   @routes (for module <- @modules,

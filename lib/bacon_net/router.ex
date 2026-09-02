@@ -11,6 +11,8 @@ defmodule BaconNet.Router do
 
   plug BaconNet.Plugs.CORS
 
+  plug BaconNet.Plugs.Webui
+
   plug Plug.Parsers,
     parsers: [:multipart, :json],
     pass: ["*/*"],
@@ -61,7 +63,7 @@ defmodule BaconNet.Router do
 
   get "/" do
     conn
-    |> put_resp_header("location", "/webui")
+    |> put_resp_header("location", "/webui/")
     |> send_resp(302, "")
   end
 
@@ -120,6 +122,20 @@ defmodule BaconNet.Router do
 
   patch "/:prefix/*rest" do
     case Registry.dispatch_api(conn, :patch, "/#{prefix}", rest) do
+      nil -> send_resp(conn, 404, "")
+      conn -> conn
+    end
+  end
+
+  put "/:prefix/*rest" do
+    case Registry.dispatch_api(conn, :put, "/#{prefix}", rest) do
+      nil -> send_resp(conn, 404, "")
+      conn -> conn
+    end
+  end
+
+  delete "/:prefix/*rest" do
+    case Registry.dispatch_api(conn, :delete, "/#{prefix}", rest) do
       nil -> send_resp(conn, 404, "")
       conn -> conn
     end
