@@ -10,8 +10,9 @@
     flake-utils.lib.eachDefaultSystem (system:
       let
         pkgs = import nixpkgs { inherit system; };
-        elixir = pkgs.elixir_1_18;
-        erlang = pkgs.erlang_27;
+        beam = pkgs.beam27Packages;
+        elixir = beam.elixir_1_18;
+        erlang = beam.erlang;
       in
       {
         devShells.default = pkgs.mkShell {
