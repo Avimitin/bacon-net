@@ -77,7 +77,7 @@ export default function Scores() {
   if (!withData.length) {
     return (
       <Stack gap={6} style={{ marginTop: "1rem" }}>
-        <h2>My scores</h2>
+        <h1>My scores</h1>
         <InlineNotification
           kind="info"
           title="No scores yet"
@@ -103,25 +103,35 @@ export default function Scores() {
   const meta = scoreTableMeta(gamesMeta, entry.game, activeTable) || {};
   const songField = meta.song_field || "music_id";
   const scoreField = meta.score_field || "score";
-  const rowsRaw = (entry.tables[activeTable] || [])
-    .filter((r) => !filter || JSON.stringify(r).toLowerCase().includes(filter))
+  const allRows = entry.tables[activeTable] || [];
+  const columns = scoreColumns(entry.game, allRows[0]);
+  const rowsRaw = allRows
+    .filter((r) => {
+      if (!filter) return true;
+      return columns.some((c) =>
+        String(r[c.key] ?? "").toLowerCase().includes(filter)
+      );
+    })
     .sort((a, b) => {
       const s = compare(a[songField], b[songField]);
       if (s !== 0) return s;
       return compare(b[scoreField], a[scoreField]); // score desc
     });
-  const columns = scoreColumns(entry.game, rowsRaw[0]);
 
   const headers = columns.map((c) => ({ key: c.key, header: c.label }));
-  const rows = rowsRaw.map((r, i) => {
-    const row = { id: String(i) };
+  const rows = rowsRaw.map((r) => {
+    const row = {
+      id: String(
+        r._id ?? [r[songField], r.chart, r[scoreField], r.timestamp].join(":")
+      ),
+    };
     for (const c of columns) row[c.key] = renderCell(c, r[c.key]);
     return row;
   });
 
   return (
     <Stack gap={6} style={{ marginTop: "1rem" }}>
-      <h2>My scores</h2>
+      <h1>My scores</h1>
       <Tabs selectedIndex={gameIdx} onChange={selectGame}>
         <TabList aria-label="Games">
           {withData.map((g) => {
@@ -154,7 +164,7 @@ export default function Scores() {
                   <Search
                     id="score-filter"
                     labelText="Filter rows"
-                    placeholder="filter rows (substring over JSON)…"
+                    placeholder="filter by song, score, chart…"
                     value={filter}
                     onChange={(e) => setFilter(e.target.value.toLowerCase())}
                   />

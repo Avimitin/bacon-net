@@ -43,7 +43,7 @@ export default function Admin() {
   return (
     <Stack gap={6} style={{ marginTop: "1rem" }}>
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h2>Admin</h2>
+        <h1>Admin</h1>
         <Button kind="ghost" size="sm" onClick={() => { lock(); }}>
           Forget token
         </Button>
@@ -106,7 +106,7 @@ function Gate({ onUnlock }) {
 
   return (
     <Stack gap={6} style={{ marginTop: "1rem", maxWidth: "32rem" }}>
-      <h2>Admin</h2>
+      <h1>Admin</h1>
       <Tile>
         <Stack gap={5}>
           <p style={{ color: "var(--cds-text-secondary)" }}>

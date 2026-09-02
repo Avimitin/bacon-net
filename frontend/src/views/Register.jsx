@@ -62,7 +62,7 @@ export default function Register() {
         <Tile style={{ marginTop: "3rem" }}>
           <Stack gap={6}>
             <div>
-              <h2>Join the network</h2>
+              <h1>Join the network</h1>
               <p style={{ color: "var(--cds-text-secondary)" }}>
                 Pick a callsign and grab a card
               </p>

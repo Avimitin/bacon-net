@@ -159,7 +159,7 @@ export default function Settings() {
             {game?.name ?? table} · profile #{docId}
           </span>
         </p>
-        <h2 style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+        <h1 style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
           Profile settings
           {icon && <img src={icon} alt="" width={36} height={36} />}
           {game && (
@@ -167,7 +167,7 @@ export default function Settings() {
               {game.key}
             </Tag>
           )}
-        </h2>
+        </h1>
       </div>
 
       <Tile>
@@ -231,18 +231,14 @@ export default function Settings() {
                             </p>
                           )}
                           <div>
-                            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: "0.5rem" }}>
-                              <span style={{ fontSize: "0.875rem", color: "var(--cds-text-secondary)" }}>
-                                Advanced — raw JSON for version {v}
-                              </span>
+                            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "0.25rem" }}>
                               <Button kind="ghost" size="sm" onClick={prettyPrint}>
                                 Pretty-print
                               </Button>
                             </div>
                             <TextArea
                               id="version-json"
-                              labelText=""
-                              hideLabel
+                              labelText={`Advanced profile JSON (version ${v})`}
                               rows={14}
                               value={jsonText}
                               onChange={(e) => setJsonText(e.target.value)}
@@ -290,6 +286,7 @@ export default function Settings() {
 }
 
 function IidxField({ def, value, onChange }) {
+  const [numberInvalid, setNumberInvalid] = useState(false);
   if (def.type === "bool") {
     return (
       <Toggle
@@ -320,9 +317,16 @@ function IidxField({ def, value, onChange }) {
       label={def.label}
       value={Number(value ?? 0)}
       step={def.step === "any" ? 0.1 : 1}
+      invalid={numberInvalid}
+      invalidText="Enter a number"
       onChange={(e, { value: v }) => {
         const n = Number(v);
-        onChange(def.key, Number.isFinite(n) ? n : 0);
+        if (v !== "" && Number.isFinite(n)) {
+          setNumberInvalid(false);
+          onChange(def.key, n);
+        } else {
+          setNumberInvalid(true);
+        }
       }}
     />
   );

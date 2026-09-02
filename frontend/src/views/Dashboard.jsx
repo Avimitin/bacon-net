@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { Link, useNavigate } from "react-router";
+import { Link } from "react-router";
 import {
   ClickableTile,
   Tag,
@@ -10,6 +10,7 @@ import {
   SkeletonText,
   SkeletonPlaceholder,
   InlineNotification,
+  NotificationActionButton,
   Button,
 } from "@carbon/react";
 import { ArrowRight } from "@carbon/icons-react";
@@ -19,7 +20,6 @@ import { gameIcon } from "../gameIcons.js";
 import { fmtDate, humanError } from "../util.js";
 
 export default function Dashboard() {
-  const navigate = useNavigate();
   const authFailure = useAuthFailure();
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
@@ -65,7 +65,7 @@ export default function Dashboard() {
   return (
     <Stack gap={7} style={{ marginTop: "1rem" }}>
       <div>
-        <h2>Welcome back, {me.username}</h2>
+        <h1>Welcome back, {me.username}</h1>
         <p style={{ color: "var(--cds-text-secondary)" }}>
           on the network since {fmtDate(me.created_at)}
         </p>
@@ -104,7 +104,7 @@ export default function Dashboard() {
               const to = `/settings/${encodeURIComponent(p.table)}/${encodeURIComponent(p.doc_id)}`;
               return (
                 <Column key={`${p.table}:${p.doc_id}`} sm={4} md={4} lg={5} style={{ marginBottom: "1rem" }}>
-                  <ClickableTile onClick={() => navigate(to)}>
+                  <ClickableTile as={Link} to={to}>
                     <Stack gap={3}>
                       <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
                         {icon && <img src={icon} alt="" width={40} height={40} />}
@@ -150,6 +150,11 @@ export default function Dashboard() {
             subtitle="Play a game with one of your bound cards, or bind a card you've already used."
             hideCloseButton
             lowContrast
+            actions={
+              <NotificationActionButton as={Link} to="/cards">
+                Bind a card
+              </NotificationActionButton>
+            }
           />
         )}
       </div>

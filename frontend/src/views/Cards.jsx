@@ -25,6 +25,7 @@ export default function Cards() {
   const [busy, setBusy] = useState(false);
   const [unbindTarget, setUnbindTarget] = useState(null);
   const [unbindError, setUnbindError] = useState(null);
+  const [unbindBusy, setUnbindBusy] = useState(false);
 
   const load = () => {
     Promise.all([api.me(), api.profiles(), getGames()])
@@ -55,8 +56,10 @@ export default function Cards() {
   };
 
   const unbind = async () => {
+    if (unbindBusy || unbindTarget === null) return;
     const uid = unbindTarget;
     setUnbindError(null);
+    setUnbindBusy(true);
     try {
       await api.unbindCard(uid);
       konamiCache.remove(uid);
@@ -64,6 +67,8 @@ export default function Cards() {
       load();
     } catch (err) {
       if (!authFailure(err)) setUnbindError(humanError(err));
+    } finally {
+      setUnbindBusy(false);
     }
   };
 
@@ -98,7 +103,7 @@ export default function Cards() {
 
   return (
     <Stack gap={7} style={{ marginTop: "1rem" }}>
-      <h2>Cards</h2>
+      <h1>Cards</h1>
 
       <Tile>
         <Stack gap={4}>
@@ -190,9 +195,11 @@ export default function Cards() {
         open={unbindTarget !== null}
         danger
         modalHeading="Unbind card"
-        primaryButtonText="Unbind"
+        primaryButtonText={unbindBusy ? "Unbinding…" : "Unbind"}
+        primaryButtonDisabled={unbindBusy}
         secondaryButtonText="Cancel"
         onRequestClose={() => {
+          if (unbindBusy) return;
           setUnbindTarget(null);
           setUnbindError(null);
         }}

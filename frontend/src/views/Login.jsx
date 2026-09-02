@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useRef, useState } from "react";
 import { Link, Navigate, useNavigate } from "react-router";
 import {
   Form,
@@ -22,6 +22,7 @@ export default function Login() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState(null);
   const [busy, setBusy] = useState(false);
+  const passwordRef = useRef(null);
 
   if (session) return <Navigate to="/" replace />;
 
@@ -36,6 +37,8 @@ export default function Login() {
     } catch (err) {
       setError(humanError(err));
       setBusy(false);
+      setPassword("");
+      passwordRef.current?.focus();
     }
   };
 
@@ -45,7 +48,7 @@ export default function Login() {
         <Tile style={{ marginTop: "3rem" }}>
           <Stack gap={6}>
             <div>
-              <h2>Welcome back, player</h2>
+              <h1>Log in</h1>
               <p style={{ color: "var(--cds-text-secondary)" }}>
                 Log in with your bacon-net account
               </p>
@@ -63,6 +66,7 @@ export default function Login() {
                   id="login-password"
                   labelText="Password"
                   value={password}
+                  ref={passwordRef}
                   onChange={(e) => setPassword(e.target.value)}
                   required
                 />

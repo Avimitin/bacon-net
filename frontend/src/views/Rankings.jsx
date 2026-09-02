@@ -13,6 +13,7 @@ import {
   Tile,
   Stack,
   InlineNotification,
+  Search,
   SkeletonText,
   SkeletonPlaceholder,
 } from "@carbon/react";
@@ -34,6 +35,7 @@ export default function Rankings() {
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
   const [groupIdx, setGroupIdx] = useState(0);
+  const [songQuery, setSongQuery] = useState("");
 
   useEffect(() => {
     Promise.all([api.rankings(), api.profiles(), getGames()])
@@ -71,7 +73,7 @@ export default function Rankings() {
   if (!rankGames.length) {
     return (
       <Stack gap={6} style={{ marginTop: "1rem" }}>
-        <h2>Rankings</h2>
+        <h1>Rankings</h1>
         <InlineNotification
           kind="info"
           title="No rankings yet"
@@ -97,13 +99,16 @@ export default function Rankings() {
     songs.get(key).push(e);
   }
   const sortedSongs = [...songs.keys()].sort(compare);
+  const matchedSongs = songQuery
+    ? sortedSongs.filter((s) => s.toLowerCase().includes(songQuery)).slice(0, 20)
+    : [];
 
   return (
     <Stack gap={6} style={{ marginTop: "1rem" }}>
-      <h2 style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
+      <h1 style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
         Rankings
         {icon && <img src={icon} alt="" width={32} height={32} />}
-      </h2>
+      </h1>
       <Dropdown
         id="ranking-group"
         titleText="Game / best-scores table"
@@ -111,7 +116,12 @@ export default function Rankings() {
         items={items}
         itemToString={(item) => (item ? item.label : "")}
         selectedItem={items[groupIdx] ?? items[0]}
-        onChange={({ selectedItem }) => selectedItem && setGroupIdx(Number(selectedItem.id))}
+        onChange={({ selectedItem }) => {
+          if (selectedItem) {
+            setGroupIdx(Number(selectedItem.id));
+            setSongQuery("");
+          }
+        }}
       />
       {!sortedSongs.length && (
         <InlineNotification
@@ -121,7 +131,34 @@ export default function Rankings() {
           lowContrast
         />
       )}
-      {sortedSongs.map((song) => {
+      {sortedSongs.length > 0 && (
+        <Search
+          id="ranking-song"
+          labelText="Find a song"
+          placeholder="type a song id to show its leaderboard…"
+          value={songQuery}
+          onChange={(e) => setSongQuery(e.target.value.toLowerCase())}
+        />
+      )}
+      {sortedSongs.length > 0 && !songQuery && (
+        <InlineNotification
+          kind="info"
+          title="Search for a song to see its leaderboard"
+          subtitle={`${sortedSongs.length} songs in this table — leaderboards render once you narrow down to a song.`}
+          hideCloseButton
+          lowContrast
+        />
+      )}
+      {songQuery && !matchedSongs.length && (
+        <InlineNotification
+          kind="info"
+          title="No songs match"
+          subtitle="Try a different song id."
+          hideCloseButton
+          lowContrast
+        />
+      )}
+      {matchedSongs.map((song) => {
         const entries = songs
           .get(song)
           .slice()

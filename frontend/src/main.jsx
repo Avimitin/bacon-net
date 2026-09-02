@@ -7,6 +7,7 @@ import {
   Link,
   Navigate,
   useNavigate,
+  useLocation,
 } from "react-router";
 import {
   Theme,
@@ -17,7 +18,9 @@ import {
   HeaderGlobalBar,
   HeaderGlobalAction,
   Content,
+  SkipToContent,
   Tag,
+  Loading,
 } from "@carbon/react";
 import { Logout } from "@carbon/icons-react";
 import "@carbon/styles/css/styles.css";
@@ -31,11 +34,21 @@ import Cards from "./views/Cards.jsx";
 import Settings from "./views/Settings.jsx";
 import Scores from "./views/Scores.jsx";
 import Rankings from "./views/Rankings.jsx";
-import Admin from "./views/Admin.jsx";
+
+const Admin = React.lazy(() => import("./views/Admin.jsx"));
+
+function NavItem({ to, end, currentPath, children }) {
+  return (
+    <HeaderMenuItem as={Link} to={to} isCurrentPage={end ? currentPath === to : currentPath.startsWith(to)}>
+      {children}
+    </HeaderMenuItem>
+  );
+}
 
 function Shell() {
   const { session, setSession } = useSession();
   const navigate = useNavigate();
+  const { pathname } = useLocation();
 
   const logout = async () => {
     try {
@@ -50,29 +63,30 @@ function Shell() {
   return (
     <Theme theme="g100">
       <Header aria-label="bacon-net webui">
+        <SkipToContent href="#main-content" />
         <HeaderName as={Link} to="/" prefix="">
           bacon-net
         </HeaderName>
         <HeaderNavigation aria-label="Main navigation">
           {session && (
             <>
-              <HeaderMenuItem as={Link} to="/">
+              <NavItem to="/" end currentPath={pathname}>
                 Dashboard
-              </HeaderMenuItem>
-              <HeaderMenuItem as={Link} to="/cards">
+              </NavItem>
+              <NavItem to="/cards" currentPath={pathname}>
                 Cards
-              </HeaderMenuItem>
-              <HeaderMenuItem as={Link} to="/scores">
+              </NavItem>
+              <NavItem to="/scores" currentPath={pathname}>
                 Scores
-              </HeaderMenuItem>
-              <HeaderMenuItem as={Link} to="/rankings">
+              </NavItem>
+              <NavItem to="/rankings" currentPath={pathname}>
                 Rankings
-              </HeaderMenuItem>
+              </NavItem>
             </>
           )}
-          <HeaderMenuItem as={Link} to="/admin">
+          <NavItem to="/admin" currentPath={pathname}>
             Admin
-          </HeaderMenuItem>
+          </NavItem>
         </HeaderNavigation>
         <HeaderGlobalBar>
           {session && (
@@ -87,7 +101,7 @@ function Shell() {
           )}
         </HeaderGlobalBar>
       </Header>
-      <Content>
+      <Content id="main-content">
         <Routes>
           <Route path="/login" element={<Login />} />
           <Route path="/register" element={<Register />} />
@@ -131,7 +145,16 @@ function Shell() {
               </RequireAuth>
             }
           />
-          <Route path="/admin" element={<Admin />} />
+          <Route
+            path="/admin"
+            element={
+              <React.Suspense
+                fallback={<Loading description="Loading admin console…" withOverlay={false} />}
+              >
+                <Admin />
+              </React.Suspense>
+            }
+          />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </Content>
