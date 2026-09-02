@@ -17,6 +17,16 @@ defmodule BaconNet.Registry do
   or method contains `{ver}`, `fun.(conn, ver)`.
   """
 
+  alias BaconNet.Config
+
+  # Legacy unauthenticated per-game JSON APIs (modules/*/api.py ports).
+  # Their routes dispatch only when Config.legacy_game_apis() is on.
+  @legacy_api_modules [
+    BaconNet.Modules.Ddr.Api,
+    BaconNet.Modules.Gitadora.Api,
+    BaconNet.Modules.Iidx.Api
+  ]
+
   @modules [
     # core
     BaconNet.Modules.Core.Apsmanager,
@@ -158,13 +168,17 @@ defmodule BaconNet.Registry do
   def dispatch_api(conn, http_method, prefix, segments) do
     Enum.find_value(@api_routes, fn r ->
       if r.http_method == http_method and r.prefix == prefix and
-           length(r.segments) == length(segments) do
+           length(r.segments) == length(segments) and api_enabled?(r.module) do
         case match_segments(r.segments, segments, %{}) do
           nil -> nil
           params -> apply(r.module, r.fun, [conn, params])
         end
       end
     end)
+  end
+
+  defp api_enabled?(module) do
+    module not in @legacy_api_modules or Config.legacy_game_apis()
   end
 
   defp match_segments([], [], params), do: params

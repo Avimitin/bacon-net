@@ -47,78 +47,113 @@ defmodule BaconNet.Modules.Core.Eacoin do
 
   def eacoin_checkout(conn) do
     {info, conn} = Core.process_request(conn)
-    Core.send_response(conn, info, E.e("response", E.e("eacoin")))
+    sessid = info |> Core.module_node() |> XNode.child("sessid") |> text() |> parse_int()
+
+    if sessid != nil and Map.has_key?(State.get(:eacoin_payments, %{}), sessid) do
+      State.update(:eacoin_payments, %{}, &{&1, Map.delete(&1, sessid)})
+      Core.send_response(conn, info, E.e("response", E.e("eacoin")))
+    else
+      error_response(conn, info)
+    end
   end
 
   def eacoin_consume(conn) do
     {info, conn} = Core.process_request(conn)
     node = Core.module_node(info)
-    sessid = node |> XNode.child("sessid") |> text() |> String.to_integer()
-    payment = node |> XNode.child("payment") |> text() |> String.to_integer()
+    sessid = node |> XNode.child("sessid") |> text() |> parse_int()
+    payment = node |> XNode.child("payment") |> text() |> parse_int()
 
-    cardid = State.get(:eacoin_payments, %{}) |> Map.get(sessid)
+    cardid = sessid && State.get(:eacoin_payments, %{}) |> Map.get(sessid)
 
-    # fallback if server is restarted mid-round for IIDX movie or gacha purchases
-    if cardid == nil do
-      response =
-        E.e("response",
-          E.e("eacoin", [
-            E.e("acstatus", 0, __type: "u8"),
-            E.e("autocharge", 0, __type: "u8"),
-            E.e("balance", Config.paseli(), __type: "s32")
-          ])
+    cond do
+      # fail closed: no session, no funds
+      cardid == nil ->
+        error_response(conn, info)
+
+      not valid_payment?(payment) ->
+        error_response(conn, info)
+
+      true ->
+        bal =
+          DB.get("paseli", %{"cardid" => cardid}) ||
+            %{"cardid" => cardid, "balance" => Config.paseli(), "total_spent" => 0}
+
+        new_balance = settle_balance(bal["balance"] - payment)
+
+        DB.upsert(
+          "paseli",
+          %{
+            "cardid" => cardid,
+            "balance" => new_balance,
+            "total_spent" => bal["total_spent"] + payment
+          },
+          %{"cardid" => cardid}
         )
 
-      Core.send_response(conn, info, response)
-    else
-      bal =
-        DB.get("paseli", %{"cardid" => cardid}) ||
-          %{"cardid" => cardid, "balance" => Config.paseli(), "total_spent" => 0}
+        response =
+          E.e("response",
+            E.e("eacoin", [
+              E.e("acstatus", 0, __type: "u8"),
+              E.e("autocharge", 0, __type: "u8"),
+              E.e("balance", new_balance, __type: "s32")
+            ])
+          )
 
-      new_balance = bal["balance"] - payment
-
-      paseli_card = %{
-        "cardid" => cardid,
-        "balance" => new_balance,
-        "total_spent" => bal["total_spent"] + payment
-      }
-
-      response =
-        E.e("response",
-          E.e("eacoin", [
-            E.e("acstatus", 0, __type: "u8"),
-            E.e("autocharge", 0, __type: "u8"),
-            E.e("balance", new_balance, __type: "s32")
-          ])
-        )
-
-      paseli_card =
-        if new_balance < 1000 or new_balance > Config.paseli() do
-          %{paseli_card | "balance" => Config.paseli()}
-        else
-          paseli_card
-        end
-
-      DB.upsert("paseli", paseli_card, %{"cardid" => cardid})
-
-      Core.send_response(conn, info, response)
+        Core.send_response(conn, info, response)
     end
   end
 
   def eacoin_getbalance(conn) do
     {info, conn} = Core.process_request(conn)
+    cardid = Core.module_node(info) |> XNode.child("cardid") |> text()
 
-    response =
-      E.e("response",
-        E.e("eacoin", [
-          E.e("acstatus", 0, __type: "u8"),
-          E.e("balance", Config.paseli(), __type: "s32")
-        ])
-      )
+    if cardid do
+      balance =
+        case DB.get("paseli", %{"cardid" => cardid}) do
+          nil -> Config.paseli()
+          bal -> bal["balance"]
+        end
 
-    Core.send_response(conn, info, response)
+      response =
+        E.e("response",
+          E.e("eacoin", [
+            E.e("acstatus", 0, __type: "u8"),
+            E.e("balance", balance, __type: "s32")
+          ])
+        )
+
+      Core.send_response(conn, info, response)
+    else
+      error_response(conn, info)
+    end
+  end
+
+  # A payment is a positive integer no larger than the configured balance
+  # cap (balances never exceed it, see settle_balance/1).
+  defp valid_payment?(payment) do
+    is_integer(payment) and payment > 0 and payment <= Config.paseli()
+  end
+
+  # Threshold reset rule: a balance leaving the 1000..cap band is topped
+  # back up to the configured balance. Applied before responding so the
+  # reported balance always matches the stored one.
+  defp settle_balance(balance) do
+    if balance < 1000 or balance > Config.paseli(), do: Config.paseli(), else: balance
+  end
+
+  defp error_response(conn, info) do
+    Core.send_response(conn, info, E.e("response", E.e("eacoin", status: 1)))
   end
 
   defp text(nil), do: nil
   defp text(%XNode{text: t}), do: t
+
+  defp parse_int(nil), do: nil
+
+  defp parse_int(s) do
+    case Integer.parse(s) do
+      {n, ""} -> n
+      _ -> nil
+    end
+  end
 end

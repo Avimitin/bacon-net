@@ -4,6 +4,13 @@
 
 Application.ensure_all_started(:inets)
 
+# Mix prunes OTP code paths, so inets' ebin may be missing from the code
+# loader path even though the app is started; add it back for :httpc.
+case :code.which(:httpc) do
+  :non_existing -> :ok
+  beam -> :code.add_patha(beam |> Path.dirname() |> String.to_charlist())
+end
+
 alias BaconNet.{E, Kbinxml, XNode}
 
 defmodule Smoke do
@@ -64,19 +71,39 @@ card = "E004009999999999"
 
 # --- shop permission: the server rejects game connections from unknown
 # PCBIDs, so permit the smoke-test PCBID first (no-op if it already exists;
-# requires BACON_ADMIN_TOKEN to be unset on the target server).
+# requires BACON_ADMIN_TOKEN when the target server has one configured).
 IO.puts("shop permit")
 permit_body = ~s|{"pcbid":"A00000000000","opname":"SMOKE TEST"}|
+
+permit_headers =
+  case System.get_env("BACON_ADMIN_TOKEN") do
+    nil -> []
+    token -> [{~c"authorization", String.to_charlist("Bearer " <> token)}]
+  end
 
 {:ok, {{_, st, _}, _, _}} =
   :httpc.request(
     :post,
-    {~c"http://127.0.0.1:8000/manage/api/shops", [], ~c"application/json", permit_body},
+    {~c"http://127.0.0.1:8000/manage/api/shops", permit_headers, ~c"application/json", permit_body},
     [],
     []
   )
 
 Smoke.check("permit smoke pcbid", st in [201, 409])
+
+# 409 means the PCBID already has a document, but it may be a pending
+# (not yet permitted) one; hit the permit endpoint to be sure.
+if st == 409 do
+  {:ok, {{_, st2, _}, _, _}} =
+    :httpc.request(
+      :post,
+      {~c"http://127.0.0.1:8000/manage/api/shops/A00000000000/permit", permit_headers, ~c"application/json", ~s|{}|},
+      [],
+      []
+    )
+
+  Smoke.check("permit existing smoke pcbid", st2 == 200)
+end
 
 # --- services.get
 IO.puts("services.get")
@@ -134,7 +161,9 @@ IO.puts("ddr")
 Smoke.check("ddr convcardnumber 200", st == 200)
 
 {st, doc} = Smoke.post_kbin("/local2/MDX:J:A:A:2019022600/playerdata/usergamedata_recv", "MDX:J:A:A:2019022600", E.e("playerdata", method: "usergamedata_recv", refid: card))
-Smoke.check("ddr usergamedata_recv", st in [200, 500])  # 500 acceptable for unknown card (crash parity)
+pd = doc && XNode.child(doc, "playerdata")
+result = pd && XNode.child(pd, "result")
+Smoke.check("ddr usergamedata_recv 200 with defined result", st == 200 and result != nil)
 
 # --- GITADORA (versioned module names)
 IO.puts("gitadora")

@@ -20,14 +20,15 @@ defmodule BaconNet.Api do
   end
 
   @doc """
-  Check the admin gate (used by /manage). When `Config.admin_token()` is unset
-  the API is open (development default); otherwise the request must carry
-  `Authorization: Bearer <token>`. Returns :ok or :unauthorized.
+  Check the admin gate (used by /manage). Fails closed: when
+  `Config.admin_token()` is unset the API is closed entirely; otherwise the
+  request must carry `Authorization: Bearer <token>`.
+  Returns :ok or :unauthorized.
   """
   def authorize_admin(conn) do
     case Config.admin_token() do
       nil ->
-        :ok
+        :unauthorized
 
       token ->
         case get_req_header(conn, "authorization") do

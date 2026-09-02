@@ -37,4 +37,16 @@ if config_env() == :prod do
   if admin_token = System.get_env("BACON_ADMIN_TOKEN") do
     config :bacon_net, admin_token: admin_token
   end
+
+  if max_decompressed = System.get_env("BACON_MAX_DECOMPRESSED_BODY") do
+    config :bacon_net, max_decompressed_body: String.to_integer(max_decompressed)
+  end
+
+  if origins = System.get_env("BACON_CORS_ORIGINS") do
+    config :bacon_net, cors_origins: String.split(origins, ",", trim: true)
+  end
+
+  if System.get_env("BACON_LEGACY_GAME_APIS") == "1" do
+    config :bacon_net, enable_legacy_game_apis: true
+  end
 end

@@ -17,6 +17,7 @@ defmodule BaconNet.Modules.Account do
   @sessions_table "webui_sessions"
   @session_ttl_seconds 30 * 24 * 3600
   @pbkdf2_iterations 200_000
+  @max_password_bytes 1024
   @ranking_top 10
 
   # Game registry: how profiles and score tables link together per game.
@@ -146,7 +147,8 @@ defmodule BaconNet.Modules.Account do
   def account_login(conn, _params) do
     with {:ok, body} <- body_object(conn),
          username when is_binary(username) <- body["username"],
-         password when is_binary(password) <- body["password"],
+         password when is_binary(password) and byte_size(password) <= @max_password_bytes <-
+           body["password"],
          user when not is_nil(user) <- DB.get(@users_table, %{"username" => String.downcase(username)}),
          true <- verify_password(user, password) do
       if user["banned"] == true do
@@ -353,6 +355,9 @@ defmodule BaconNet.Modules.Account do
     end
   end
 
+  defp valid_password(pw) when is_binary(pw) and byte_size(pw) > @max_password_bytes,
+    do: {:error, "password_too_long"}
+
   defp valid_password(pw) when is_binary(pw) and byte_size(pw) >= 8, do: {:ok, pw}
   defp valid_password(_), do: {:error, "password_too_short"}
 
@@ -374,9 +379,17 @@ defmodule BaconNet.Modules.Account do
   defp create_session(username) do
     token = :crypto.strong_rand_bytes(32) |> Base.hex_encode32(case: :lower, padding: false)
     expires_at = System.system_time(:second) + @session_ttl_seconds
-    DB.insert(@sessions_table, %{"token" => token, "username" => username, "expires_at" => expires_at})
+
+    DB.insert(@sessions_table, %{
+      "token" => hash_token(token),
+      "username" => username,
+      "expires_at" => expires_at
+    })
+
     {token, expires_at}
   end
+
+  defp hash_token(token), do: :crypto.hash(:sha256, token) |> Base.encode16()
 
   defp session_response(token, expires_at, username) do
     %{"token" => token, "expires_at" => expires_at, "username" => username}
@@ -395,11 +408,12 @@ defmodule BaconNet.Modules.Account do
 
   defp authenticate(conn) do
     with ["Bearer " <> token] <- get_req_header(conn, "authorization"),
-         session when not is_nil(session) <- DB.get(@sessions_table, %{"token" => token}),
+         digest = hash_token(token),
+         session when not is_nil(session) <- DB.get(@sessions_table, %{"token" => digest}),
          true <- (session["expires_at"] || 0) > System.system_time(:second),
          user when not is_nil(user) <- DB.get(@users_table, %{"username" => session["username"]}),
          false <- user["banned"] == true do
-      {:ok, user, token}
+      {:ok, user, digest}
     else
       _ -> :unauthorized
     end

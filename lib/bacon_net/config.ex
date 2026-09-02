@@ -13,7 +13,7 @@ defmodule BaconNet.Config do
     Application.get_env(:bacon_net, :ip) || detect_ip()
   end
 
-  @doc "Bearer token protecting /manage/api; nil means open (development default)."
+  @doc "Bearer token protecting /manage/api; nil means the management API is closed."
   def admin_token, do: Application.get_env(:bacon_net, :admin_token)
 
   @doc "Directory the static webui is served from (priv/static unless overridden)."
@@ -28,6 +28,11 @@ defmodule BaconNet.Config do
   def arcade, do: Application.get_env(:bacon_net, :arcade, @default_arcade)
   def paseli, do: Application.get_env(:bacon_net, :paseli, 10_000)
   def maintenance_mode, do: Application.get_env(:bacon_net, :maintenance_mode, false)
+  def max_decompressed_body, do: Application.get_env(:bacon_net, :max_decompressed_body, 16_000_000)
+  def cors_origins, do: Application.get_env(:bacon_net, :cors_origins, [])
+
+  @doc "Legacy unauthenticated per-game JSON APIs (/iidx, /ddr, /gfdm); disabled by default."
+  def legacy_game_apis, do: Application.get_env(:bacon_net, :enable_legacy_game_apis, false)
 
   @doc "Settings map exposed at /config."
   def settings do

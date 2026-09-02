@@ -63,7 +63,9 @@ In releases, override via environment (`config/runtime.exs`):
 | `BACON_RESPONSE_COMPRESSION` | `0` (`1` enables)    |
 | `BACON_MAINTENANCE_MODE`     | `0` (`1` enables)    |
 | `BACON_WEBUI_DIR`            | bundled webui        |
-| `BACON_ADMIN_TOKEN`          | unset (API open)     |
+| `BACON_ADMIN_TOKEN`          | unset (API closed)   |
+| `BACON_MAX_DECOMPRESSED_BODY` | `16000000`          |
+| `BACON_CORS_ORIGINS`         | none (comma-separated allowlist) |
 
 The database is a TinyDB-compatible `db.json` in the working directory.
 
@@ -104,8 +106,8 @@ when its PCBID is permitted:
 - Unknown PCBIDs are remembered as *pending* shops (`shop` table,
   `"permitted": false`) so the operator can approve them from the Admin →
   Shops page (or `POST /manage/api/shops/{pcbid}/permit`).
-- Shop documents predating this feature have no `permitted` field and count
-  as permitted (grandfathered).
+- Only shop documents with `"permitted": true` can connect; anything else
+  (missing, false, or absent flag) is rejected.
 - Shops and player accounts are separate scopes: a shop permission only
   allows cabinets to connect, and players keep full access to their own
   cards regardless of which shop they played at.
@@ -115,8 +117,8 @@ when its PCBID is permitted:
 The server has no TLS — run it on a trusted LAN or behind a reverse proxy.
 Set `BACON_ADMIN_TOKEN` to protect `/manage/api` with
 `Authorization: Bearer <token>` (players never need it; it is for the
-operator's Admin view in the webui). When unset, `/manage/api` is open —
-fine for development, not for a shop floor.
+operator's Admin view in the webui). When unset, `/manage/api` is closed
+entirely (fail closed).
 
 Permit each cabinet's PCBID from the Admin → Shops page before it can
 connect (see "Shops (PCBID permissions)"). Use Admin → Users to ban a

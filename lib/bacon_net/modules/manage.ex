@@ -13,6 +13,9 @@ defmodule BaconNet.Modules.Manage do
 
   @users_table "webui_users"
   @sessions_table "webui_sessions"
+  # Credential-bearing tables are served only through the curated routes
+  # below; the generic table CRUD refuses them.
+  @sensitive_tables [@users_table, @sessions_table]
 
   def routes do
     %{
@@ -72,14 +75,14 @@ defmodule BaconNet.Modules.Manage do
   end
 
   def manage_table_list(conn, %{"table" => table}) do
-    guard(conn, fn ->
+    guard_table(conn, table, fn ->
       docs = for {id, doc} <- DB.all_with_ids(table), do: Map.put(doc, "_id", id)
       Api.json(conn, %{"docs" => docs})
     end)
   end
 
   def manage_table_insert(conn, %{"table" => table}) do
-    guard(conn, fn ->
+    guard_table(conn, table, fn ->
       with {:ok, doc} <- body_object(conn) do
         {id, doc} = DB.insert_with_id(table, doc)
 
@@ -93,14 +96,14 @@ defmodule BaconNet.Modules.Manage do
   end
 
   def manage_table_drop(conn, %{"table" => table}) do
-    guard(conn, fn ->
+    guard_table(conn, table, fn ->
       DB.drop_table(table)
       send_resp(conn, 204, "")
     end)
   end
 
   def manage_doc_get(conn, %{"table" => table, "id" => id}) do
-    guard(conn, fn ->
+    guard_table(conn, table, fn ->
       case DB.get_by_id(table, id) do
         nil -> not_found(conn)
         doc -> Api.json(conn, Map.put(doc, "_id", id))
@@ -109,7 +112,7 @@ defmodule BaconNet.Modules.Manage do
   end
 
   def manage_doc_replace(conn, %{"table" => table, "id" => id}) do
-    guard(conn, fn ->
+    guard_table(conn, table, fn ->
       with {:ok, doc} <- body_object(conn),
            :ok <- DB.replace_by_id(table, id, Map.delete(doc, "_id")) do
         Api.json(conn, Map.put(doc, "_id", id))
@@ -121,7 +124,7 @@ defmodule BaconNet.Modules.Manage do
   end
 
   def manage_doc_update(conn, %{"table" => table, "id" => id}) do
-    guard(conn, fn ->
+    guard_table(conn, table, fn ->
       with {:ok, fields} <- body_object(conn),
            :ok <- DB.update_by_id(table, id, Map.delete(fields, "_id")) do
         Api.json(conn, Map.put(DB.get_by_id(table, id), "_id", id))
@@ -133,7 +136,7 @@ defmodule BaconNet.Modules.Manage do
   end
 
   def manage_doc_delete(conn, %{"table" => table, "id" => id}) do
-    guard(conn, fn ->
+    guard_table(conn, table, fn ->
       case DB.remove_by_id(table, id) do
         :ok -> send_resp(conn, 204, "")
         :not_found -> not_found(conn)
@@ -246,6 +249,14 @@ defmodule BaconNet.Modules.Manage do
   end
 
   ## Internals
+
+  defp guard_table(conn, table, fun) do
+    if table in @sensitive_tables do
+      Api.error(conn, 403, "forbidden")
+    else
+      guard(conn, fun)
+    end
+  end
 
   defp guard(conn, fun) do
     case Api.authorize_admin(conn) do

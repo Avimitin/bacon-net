@@ -4,10 +4,9 @@ defmodule BaconNet.Shop do
 
   Shops live in the `shop` table as `%{"pcbid" => ..., "opname" => ...,
   "permitted" => bool}` documents. A game request whose `srcid` PCBID is
-  unknown or not permitted is rejected; unknown PCBIDs are remembered as
-  pending (`"permitted" => false`) so an admin can approve them from the
-  webui. Documents predating the permit flag are grandfathered in
-  (a missing `"permitted"` field counts as permitted).
+  unknown or not explicitly permitted (`"permitted" => true`) is rejected;
+  unknown PCBIDs are remembered as pending (`"permitted" => false`) so an
+  admin can approve them from the webui.
   """
 
   alias BaconNet.DB
@@ -18,7 +17,7 @@ defmodule BaconNet.Shop do
   def permitted?(pcbid) when is_binary(pcbid) do
     case DB.get(@table, %{"pcbid" => pcbid}) do
       nil -> false
-      doc -> Map.get(doc, "permitted", true) != false
+      doc -> Map.get(doc, "permitted") == true
     end
   end
 
@@ -29,13 +28,15 @@ defmodule BaconNet.Shop do
   admin can approve it. No-op for PCBIDs that already have a document.
   """
   def register_pending(pcbid) when is_binary(pcbid) do
-    if DB.get(@table, %{"pcbid" => pcbid}) == nil do
-      DB.insert(@table, %{
+    DB.insert_unless_exists(
+      @table,
+      %{
         "pcbid" => pcbid,
         "permitted" => false,
         "first_seen" => System.system_time(:second)
-      })
-    end
+      },
+      %{"pcbid" => pcbid}
+    )
 
     :ok
   end

@@ -51,63 +51,116 @@ defmodule BaconNet.Core do
   end
 
   defp do_process_request(%Plug.Conn{} = conn) do
-    {body, conn} = read_body_cached(conn)
+    case read_body_cached(conn) do
+      {:ok, body, conn} ->
+        case decode_request(conn, body) do
+          {:ok, info} ->
+            {info, conn}
+
+          {:error, status, reason} ->
+            Logger.warning("rejecting malformed e-amuse request: #{reason}")
+            {%{}, conn |> send_resp(status, "") |> halt()}
+        end
+
+      {:error, status, conn} ->
+        {%{}, conn |> send_resp(status, "") |> halt()}
+    end
+  end
+
+  defp decode_request(conn, body) do
     cl = get_req_header(conn, "content-length") |> List.first()
 
     if !cl or body == <<>> do
-      {%{}, conn}
+      {:ok, %{}}
     else
-      data = binary_part(body, 0, min(byte_size(body), String.to_integer(cl)))
-      compress = get_req_header(conn, "x-compress") |> List.first() || "none"
-
-      {xml_dec, is_encrypted} =
-        case get_req_header(conn, "x-eamuse-info") |> List.first() do
-          nil ->
-            {data, false}
-
-          x_eamuse_info ->
-            [_version, unix_time, prng] = String.split(x_eamuse_info, "-")
-            key = Arc4.eamuse_key(unhex(unix_time), unhex(prng))
-            {Arc4.crypt(key, data), true}
+      with {:ok, cl_int} <- parse_content_length(cl),
+           {:ok, xml_dec, is_encrypted} <- maybe_decrypt(conn, binary_part(body, 0, min(byte_size(body), cl_int))),
+           {:ok, xml_dec, compress} <- maybe_decompress(conn, xml_dec),
+           {:ok, root, text, is_binxml} <- decode_xml(xml_dec) do
+        if Config.verbose_log() do
+          Logger.debug("REQUEST:\n" <> text)
         end
 
-      xml_dec = if compress == "lz77", do: LZ77.decode(xml_dec), else: xml_dec
+        [model | _] = model_parts = String.split(XNode.attr(root, "model") || "", ":")
+        module_node = root.children |> List.first()
+        module = if module_node, do: module_node.tag
+        method = module_node && XNode.attr(module_node, "method")
+        command = module_node && XNode.attr(module_node, "command")
+        game_version = game_version_from_software_version([XNode.attr(root, "model") | model_parts])
 
-      is_binxml = Kbinxml.is_binary_xml(xml_dec)
-      kbin = Kbinxml.decode(xml_dec)
-      root = kbin.node
-      text = Kbinxml.to_text(root)
-
-      if Config.verbose_log() do
-        IO.puts("")
-        IO.puts(IO.ANSI.blue() <> "REQUEST" <> IO.ANSI.reset() <> ":")
-        IO.puts(text)
+        {:ok,
+         %{
+           root: root,
+           text: text,
+           module: module,
+           method: method,
+           command: command,
+           model: model,
+           dest: Enum.at(model_parts, 1),
+           spec: Enum.at(model_parts, 2),
+           rev: Enum.at(model_parts, 3),
+           ext: Enum.at(model_parts, 4),
+           game_version: game_version,
+           compress: compress,
+           is_encrypted: is_encrypted,
+           is_binxml: is_binxml
+         }}
       end
-
-      [model | _] = model_parts = String.split(XNode.attr(root, "model") || "", ":")
-      module_node = root.children |> List.first()
-      module = if module_node, do: module_node.tag
-      method = module_node && XNode.attr(module_node, "method")
-      command = module_node && XNode.attr(module_node, "command")
-      game_version = game_version_from_software_version([XNode.attr(root, "model") | model_parts])
-
-      {%{
-         root: root,
-         text: text,
-         module: module,
-         method: method,
-         command: command,
-         model: model,
-         dest: Enum.at(model_parts, 1),
-         spec: Enum.at(model_parts, 2),
-         rev: Enum.at(model_parts, 3),
-         ext: Enum.at(model_parts, 4),
-         game_version: game_version,
-         compress: compress,
-         is_encrypted: is_encrypted,
-         is_binxml: is_binxml
-       }, conn}
     end
+  end
+
+  defp parse_content_length(cl) do
+    case Integer.parse(cl) do
+      {n, ""} when n >= 0 -> {:ok, n}
+      _ -> {:error, 400, "invalid content-length header #{inspect(cl)}"}
+    end
+  end
+
+  defp maybe_decrypt(conn, data) do
+    case get_req_header(conn, "x-eamuse-info") |> List.first() do
+      nil ->
+        {:ok, data, false}
+
+      x_eamuse_info ->
+        with [_version, unix_time, prng] <- String.split(x_eamuse_info, "-"),
+             {:ok, time_bin} <- unhex(unix_time),
+             {:ok, prng_bin} <- unhex(prng) do
+          {:ok, Arc4.crypt(Arc4.eamuse_key(time_bin, prng_bin), data), true}
+        else
+          _ -> {:error, 400, "malformed x-eamuse-info header #{inspect(x_eamuse_info)}"}
+        end
+    end
+  end
+
+  defp maybe_decompress(conn, data) do
+    compress = get_req_header(conn, "x-compress") |> List.first() || "none"
+
+    if compress == "lz77" do
+      decoded = LZ77.decode(data)
+
+      if byte_size(decoded) > Config.max_decompressed_body() do
+        {:error, 413, "decompressed body exceeds #{Config.max_decompressed_body()} bytes"}
+      else
+        {:ok, decoded, compress}
+      end
+    else
+      {:ok, data, compress}
+    end
+  end
+
+  # Kbinxml raises bare RuntimeErrors on malformed input and xmerl exits on
+  # malformed text XML; every failure here is a client fault, so map any of
+  # them to a 400.
+  defp decode_xml(xml_dec) do
+    is_binxml = Kbinxml.is_binary_xml(xml_dec)
+    kbin = Kbinxml.decode(xml_dec)
+    root = kbin.node
+    text = Kbinxml.to_text(root)
+    {:ok, root, text, is_binxml}
+  rescue
+    e -> {:error, 400, "invalid kbin/xml payload: #{Exception.message(e)}"}
+  catch
+    :exit, reason -> {:error, 400, "invalid kbin/xml payload: #{inspect(reason)}"}
   end
 
   @doc "The first child of the request root (the module node), or nil."
@@ -123,20 +176,26 @@ defmodule BaconNet.Core do
   """
   def guard_shop(%Plug.Conn{} = conn) do
     {info, conn} = process_request(conn)
-    pcbid = info[:root] && XNode.attr(info.root, "srcid")
 
-    if Shop.permitted?(pcbid) do
-      {:ok, conn}
+    # The decode already sent a 4xx for a malformed request; do not answer twice.
+    if conn.halted do
+      {:rejected, conn}
     else
-      Shop.register_pending(pcbid)
+      pcbid = info[:root] && XNode.attr(info.root, "srcid")
 
-      if pcbid do
-        Logger.warning("rejecting game request from unpermitted PCBID #{pcbid}")
+      if Shop.permitted?(pcbid) do
+        {:ok, conn}
       else
-        Logger.warning("rejecting game request without a PCBID")
-      end
+        Shop.register_pending(pcbid)
 
-      {:rejected, reject_request(conn, info)}
+        if pcbid do
+          Logger.warning("rejecting game request from unpermitted PCBID #{pcbid}")
+        else
+          Logger.warning("rejecting game request without a PCBID")
+        end
+
+        {:rejected, reject_request(conn, info)}
+      end
     end
   end
 
@@ -166,8 +225,7 @@ defmodule BaconNet.Core do
       end
 
     if Config.verbose_log() do
-      IO.puts(IO.ANSI.red() <> "RESPONSE" <> IO.ANSI.reset() <> ":")
-      IO.puts(text)
+      Logger.debug("RESPONSE:\n" <> text)
     end
 
     headers = [{"user-agent", "EAMUSE.Httpac/1.0"}]
@@ -206,22 +264,33 @@ defmodule BaconNet.Core do
   defp read_body_cached(conn) do
     case conn.private[:bacon_body] do
       nil ->
-        {:ok, body, conn} = read_body(conn, length: 64_000_000)
-        {body, put_private(conn, :bacon_body, body)}
+        case read_body(conn, length: 64_000_000) do
+          {:ok, body, conn} -> {:ok, body, put_private(conn, :bacon_body, body)}
+          {:more, _partial, conn} -> {:error, 413, conn}
+          {:error, _reason} -> {:error, 400, conn}
+        end
 
       body ->
-        {body, conn}
+        {:ok, body, conn}
     end
   end
 
   defp unhex(hex) do
     hex = if rem(String.length(hex), 2) == 1, do: "0" <> hex, else: hex
-    Base.decode16!(String.upcase(hex))
+
+    case Base.decode16(String.upcase(hex)) do
+      {:ok, bin} -> {:ok, bin}
+      :error -> {:error, 400, "invalid hex in x-eamuse-info header"}
+    end
   end
 
   @doc "Map a software model string to a game version (core_common.py rules)."
   def game_version_from_software_version([_full, model, _dest, _spec, _rev, ext | _]) do
-    ext = String.to_integer(ext || "0")
+    ext =
+      case Integer.parse(ext || "0") do
+        {n, _} -> n
+        :error -> 0
+      end
 
     cond do
       model == "LDJ" ->

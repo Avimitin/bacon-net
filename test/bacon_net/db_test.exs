@@ -56,4 +56,55 @@ defmodule BaconNet.DBTest do
     assert Enum.find(DB.tables(), fn {name, _} -> name == @table end) == {@table, 1}
     assert DB.tables() == Enum.sort(DB.tables())
   end
+
+  test "insert_unless_exists inserts at most one matching document" do
+    assert :inserted = DB.insert_unless_exists(@table, %{"a" => 1}, %{"a" => 1})
+    assert :exists = DB.insert_unless_exists(@table, %{"a" => 1, "b" => 2}, %{"a" => 1})
+    assert :inserted = DB.insert_unless_exists(@table, %{"a" => 2}, %{"a" => 2})
+
+    assert DB.all(@table) == [%{"a" => 1}, %{"a" => 2}]
+  end
+
+  test "init starts empty when the database file is missing" do
+    path = Path.join(System.tmp_dir!(), "bacon_db_missing_#{System.unique_integer([:positive])}.json")
+
+    with_db_path(path, fn ->
+      assert {:ok, %{}} = DB.init([])
+    end)
+  end
+
+  test "init raises on malformed JSON" do
+    path = Path.join(System.tmp_dir!(), "bacon_db_corrupt_#{System.unique_integer([:positive])}.json")
+    File.write!(path, "{not json")
+
+    with_db_path(path, fn ->
+      assert_raise RuntimeError, ~r/malformed JSON/, fn -> DB.init([]) end
+    end)
+
+    File.rm(path)
+  end
+
+  test "init raises on unreadable database files other than :enoent" do
+    dir = Path.join(System.tmp_dir!(), "bacon_db_dir_#{System.unique_integer([:positive])}")
+    File.mkdir_p!(dir)
+
+    with_db_path(dir, fn ->
+      assert_raise RuntimeError, ~r/failed to read database file/, fn -> DB.init([]) end
+    end)
+
+    File.rmdir(dir)
+  end
+
+  defp with_db_path(path, fun) do
+    old = Application.get_env(:bacon_net, :db_path)
+    Application.put_env(:bacon_net, :db_path, path)
+
+    try do
+      fun.()
+    after
+      if old,
+        do: Application.put_env(:bacon_net, :db_path, old),
+        else: Application.delete_env(:bacon_net, :db_path)
+    end
+  end
 end

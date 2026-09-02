@@ -6,7 +6,10 @@ config :bacon_net,
   verbose_log: true,
   arcade: "Ｍ０ＮＫＹＢＵＳ１Ｎ３Ｚ",
   paseli: 10_000,
-  maintenance_mode: false
+  maintenance_mode: false,
+  max_decompressed_body: 16_000_000,
+  cors_origins: [],
+  enable_legacy_game_apis: false
 
 config :logger, level: :info
 

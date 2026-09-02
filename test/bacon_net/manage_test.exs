@@ -6,14 +6,21 @@ defmodule BaconNet.ManageTest do
   alias BaconNet.DB
 
   @table "test_manage"
+  @token "manage-test-token"
 
   setup do
     DB.drop_table(@table)
-    on_exit(fn -> DB.drop_table(@table) end)
+    Application.put_env(:bacon_net, :admin_token, @token)
+
+    on_exit(fn ->
+      DB.drop_table(@table)
+      Application.delete_env(:bacon_net, :admin_token)
+    end)
+
     :ok
   end
 
-  defp call(method, path, body \\ nil) do
+  defp call(method, path, body \\ nil, token \\ @token) do
     conn =
       if body do
         conn(method, path, Jason.encode!(body))
@@ -21,6 +28,9 @@ defmodule BaconNet.ManageTest do
       else
         conn(method, path)
       end
+
+    conn =
+      if token, do: Plug.Conn.put_req_header(conn, "authorization", "Bearer #{token}"), else: conn
 
     BaconNet.Router.call(conn, BaconNet.Router.init([]))
   end
@@ -36,6 +46,17 @@ defmodule BaconNet.ManageTest do
     conn = call(:get, "/manage/api/tables")
     assert conn.status == 200
     assert %{"tables" => _} = json(conn)
+  end
+
+  test "admin API is closed when no token is configured" do
+    Application.delete_env(:bacon_net, :admin_token)
+    assert call(:get, "/manage/api/tables").status == 401
+    assert call(:post, "/manage/api/shops", %{"pcbid" => "SHOPTESTPCBID02"}).status == 401
+  end
+
+  test "wrong or missing token is rejected" do
+    assert call(:get, "/manage/api/tables", nil, "wrong-token").status == 401
+    assert call(:get, "/manage/api/tables", nil, nil).status == 401
   end
 
   test "document CRUD roundtrip" do
@@ -76,6 +97,22 @@ defmodule BaconNet.ManageTest do
     assert call(:patch, "/manage/api/table/#{@table}/999", %{"a" => 1}).status == 404
     assert call(:put, "/manage/api/table/#{@table}/999", %{"a" => 1}).status == 404
     assert call(:delete, "/manage/api/table/#{@table}/999").status == 404
+  end
+
+  test "credential-bearing tables are refused by the generic table routes" do
+    for table <- ["webui_users", "webui_sessions"] do
+      assert call(:get, "/manage/api/table/#{table}").status == 403
+      assert call(:post, "/manage/api/table/#{table}", %{"x" => 1}).status == 403
+      assert call(:delete, "/manage/api/table/#{table}").status == 403
+      assert call(:get, "/manage/api/table/#{table}/1").status == 403
+      assert call(:put, "/manage/api/table/#{table}/1", %{"x" => 1}).status == 403
+      assert call(:patch, "/manage/api/table/#{table}/1", %{"x" => 1}).status == 403
+      assert call(:delete, "/manage/api/table/#{table}/1").status == 403
+    end
+
+    # a normal table is unaffected
+    assert call(:get, "/manage/api/table/#{@table}").status == 200
+    assert call(:post, "/manage/api/table/#{@table}", %{"x" => 1}).status == 201
   end
 
   test "cards groups documents by card field" do

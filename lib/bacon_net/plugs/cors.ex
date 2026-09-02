@@ -1,21 +1,35 @@
 defmodule BaconNet.Plugs.CORS do
   @moduledoc """
-  Permissive CORS headers (FastAPI CORSMiddleware counterpart).
+  CORS headers for allowlisted origins (FastAPI CORSMiddleware counterpart).
+
+  Only request origins listed in `config :bacon_net, cors_origins` (default
+  `[]`) receive CORS headers; the allowlist is reflected origin-for-origin and
+  never `*`, so it can safely combine with credentials. Same-origin requests
+  carry no Origin header and pass through untouched.
   """
 
   import Plug.Conn
 
+  alias BaconNet.Config
+
   def init(opts), do: opts
 
   def call(conn, _opts) do
-    conn =
-      conn
-      |> put_resp_header("access-control-allow-origin", "*")
-      |> put_resp_header("access-control-allow-credentials", "true")
-      |> put_resp_header("access-control-allow-methods", "*")
-      |> put_resp_header("access-control-allow-headers", "*")
+    origin = get_req_header(conn, "origin") |> List.first()
 
-    if conn.method == "OPTIONS" do
+    conn =
+      if origin && origin in Config.cors_origins() do
+        conn
+        |> put_resp_header("access-control-allow-origin", origin)
+        |> put_resp_header("access-control-allow-credentials", "true")
+        |> put_resp_header("access-control-allow-methods", "GET, POST, PUT, PATCH, DELETE, OPTIONS")
+        |> put_resp_header("access-control-allow-headers", "authorization, content-type")
+        |> put_resp_header("vary", "origin")
+      else
+        conn
+      end
+
+    if conn.method == "OPTIONS" and origin do
       conn |> send_resp(204, "") |> halt()
     else
       conn

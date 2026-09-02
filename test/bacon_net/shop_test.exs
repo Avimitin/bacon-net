@@ -59,12 +59,12 @@ defmodule BaconNet.ShopTest do
     assert "facility" in items
   end
 
-  test "legacy shop documents without the permitted flag still connect" do
+  test "shop documents without permitted: true are rejected" do
     DB.insert("shop", %{"pcbid" => "LEGACYPCBID00001", "opname" => "OLD SHOP"})
-    assert Shop.permitted?("LEGACYPCBID00001")
+    refute Shop.permitted?("LEGACYPCBID00001")
 
     conn = services_get("LEGACYPCBID00001")
-    assert {"services", nil} = status_of(conn)
+    assert {"services", "1"} = status_of(conn)
   end
 
   test "revoked shops are rejected again" do

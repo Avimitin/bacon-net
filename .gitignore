@@ -27,3 +27,4 @@
 .DS_Store
 /result
 /result-*
+erl_crash.dump

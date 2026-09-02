@@ -69,6 +69,34 @@ defmodule BaconNet.AccountTest do
     assert call(:get, "/account/api/me", nil, token).status == 401
   end
 
+  test "sessions store only the token hash" do
+    %{"token" => token} = json(register())
+
+    session = DB.get("webui_sessions", %{"username" => "player1"})
+    assert session["token"] == :crypto.hash(:sha256, token) |> Base.encode16()
+    refute Jason.encode!(session) =~ token
+
+    # the plaintext token still authenticates and logs out
+    assert call(:get, "/account/api/me", nil, token).status == 200
+    assert call(:post, "/account/api/logout", nil, token).status == 204
+    assert DB.get("webui_sessions", %{"username" => "player1"}) == nil
+  end
+
+  test "oversized passwords are rejected before hashing" do
+    big = String.duplicate("a", 1025)
+
+    conn = register("bigpw", big)
+    assert conn.status == 400
+    assert %{"error" => "password_too_long"} = json(conn)
+
+    # exactly at the limit is fine
+    assert register("limitpw", String.duplicate("a", 1024)).status == 201
+
+    # login with an oversized password is rejected without hashing
+    assert call(:post, "/account/api/login", %{"username" => "limitpw", "password" => big}).status == 401
+    assert call(:post, "/account/api/login", %{"username" => "limitpw", "password" => String.duplicate("a", 1024)}).status == 200
+  end
+
   test "card binding with normalization and uniqueness" do
     %{"token" => t1} = json(register("alice", "password123"))
     %{"token" => t2} = json(register("bob", "password123"))

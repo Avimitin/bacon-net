@@ -77,6 +77,13 @@ defmodule BaconNet.DB do
   def remove(table, conds) when is_map(conds),
     do: GenServer.call(__MODULE__, {:remove, table, conds})
 
+  @doc """
+  Insert `doc` unless a document matching `conds` already exists, as a single
+  atomic check-and-insert. Returns :inserted or :exists.
+  """
+  def insert_unless_exists(table, doc, conds) when is_map(doc) and is_map(conds),
+    do: GenServer.call(__MODULE__, {:insert_unless_exists, table, doc, conds})
+
   @doc "Path of the backing JSON file."
   def path do
     Application.get_env(:bacon_net, :db_path, "db.json")
@@ -88,8 +95,20 @@ defmodule BaconNet.DB do
   def init(_opts) do
     data =
       case File.read(path()) do
-        {:ok, json} -> Jason.decode!(json)
-        {:error, _} -> %{}
+        {:ok, json} ->
+          case Jason.decode(json) do
+            {:ok, data} when is_map(data) ->
+              data
+
+            _ ->
+              raise "failed to load database from #{path()}: malformed JSON"
+          end
+
+        {:error, :enoent} ->
+          %{}
+
+        {:error, reason} ->
+          raise "failed to read database file #{path()}: #{:file.format_error(reason)}"
       end
 
     {:ok, data}
@@ -246,6 +265,19 @@ defmodule BaconNet.DB do
     {:reply, :ok, data}
   end
 
+  def handle_call({:insert_unless_exists, table, doc, conds}, _from, data) do
+    docs = Map.get(data, table, %{})
+
+    if Enum.any?(docs, fn {_id, d} -> matches?(d, conds) end) do
+      {:reply, :exists, data}
+    else
+      id = next_id(docs)
+      data = put_in(data, [Access.key(table, %{}), Integer.to_string(id)], doc)
+      persist(data)
+      {:reply, :inserted, data}
+    end
+  end
+
   ## Internals
 
   # TinyDB iterates documents in insertion order, which matches ascending
@@ -282,7 +314,20 @@ defmodule BaconNet.DB do
     |> Kernel.+(1)
   end
 
+  # Write-then-rename so a crash mid-write never leaves a truncated file;
+  # a failed write raises so callers get an error instead of a false success
+  # and the supervisor restarts us onto the last good file.
   defp persist(data) do
-    File.write(path(), Jason.encode!(data, pretty: true))
+    target = path()
+    tmp = target <> ".tmp"
+
+    with :ok <- File.write(tmp, Jason.encode!(data, pretty: true)),
+         :ok <- File.rename(tmp, target) do
+      :ok
+    else
+      {:error, reason} ->
+        Logger.error("failed to persist database to #{target}: #{:file.format_error(reason)}")
+        raise "failed to persist database to #{target}: #{:file.format_error(reason)}"
+    end
   end
 end

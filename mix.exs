@@ -66,8 +66,7 @@ defmodule BaconNet.MixProject do
     [
       bacon_net: [
         include_executables_for: [:unix],
-        applications: [bacon_net: :permanent],
-        cookie: "bacon_net"
+        applications: [bacon_net: :permanent]
       ]
     ]
   end

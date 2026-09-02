@@ -40,18 +40,13 @@ defmodule BaconNet.Modules.Ddr.Playerdata2 do
   @priorities ["Judgment", "Arrow"]
   @timing_disps ["Off", "On"]
 
-  @default_records [
-    "1,d,1111111,1,0,0,0,0,0,ffffffffffffffff,0,0,0,0,0,0,0,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,,1010-1010,,,,,,",
-    "0,3,0,0,0,0,0,3,0,0,0,0,1,2,0,0,0,10.000000,10.000000,10.000000,10.000000,0.000000,0.000000,0.000000,0.000000,,,,,,,,",
-    "1,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,,,,,,,,",
-    "0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,0.000000,,,,,,,,"
-  ]
-
   def get_profile(cid), do: DB.get("ddr_profile", %{"card" => cid})
 
   def get_game_profile(cid, game_version) do
-    profile = get_profile(cid)
-    profile |> Map.fetch!("version") |> Map.get(to_string(game_version))
+    case get_profile(cid) do
+      nil -> nil
+      profile -> profile |> Map.fetch!("version") |> Map.get(to_string(game_version))
+    end
   end
 
   def get_common(ddr_id, game_version, idx) do
@@ -455,84 +450,78 @@ defmodule BaconNet.Modules.Ddr.Playerdata2 do
     {info, conn} = Core.process_request(conn)
     game_version = info.game_version
 
-    data = Core.module_node(info) |> XNode.child("data")
-    cid = find_text(data, "refid")
-    profile = get_game_profile(cid, game_version)
+    module_node = Core.module_node(info)
+    data = module_node && XNode.child(module_node, "data")
+    cid = data && find_text(data, "refid")
+    profile = cid && get_game_profile(cid, game_version)
 
-    all_profiles_for_card = DB.get("ddr_profile", %{"card" => cid})
+    if profile == nil do
+      Core.send_response(conn, info, E.e("response", E.e("playerdata_2", E.e("result", 1, __type: "s32"))))
+    else
+      common = profile |> Map.fetch!("common") |> String.split(",")
+      common = List.replace_at(common, 5, index_of!(@calories_disp, Map.fetch!(profile, "calories_disp")))
 
-    load =
-      if all_profiles_for_card == nil do
-        # Python quirk: these b64encode(...) results are bytes objects (no
-        # .decode() here), so the E typemap renders them via str(bytes), i.e.
-        # wrapped in b'...' — unreachable in practice because
-        # get_game_profile above already raised for unknown cards.
-        for r <- @default_records, do: "b'" <> Base.encode64(r) <> "'"
-      else
-        common = profile |> Map.fetch!("common") |> String.split(",")
-        common = List.replace_at(common, 5, index_of!(@calories_disp, Map.fetch!(profile, "calories_disp")))
+      common =
+        List.replace_at(
+          common,
+          6,
+          @characters |> index_of!(Map.fetch!(profile, "character")) |> Integer.to_string(16) |> String.downcase()
+        )
 
-        common =
-          List.replace_at(
-            common,
-            6,
-            @characters |> index_of!(Map.fetch!(profile, "character")) |> Integer.to_string(16) |> String.downcase()
-          )
+      common = List.replace_at(common, 9, 1)
+      common_load = Enum.map_join(common, ",", &to_string/1)
 
-        common = List.replace_at(common, 9, 1)
-        common_load = Enum.map_join(common, ",", &to_string/1)
+      option = profile |> Map.fetch!("option") |> String.split(",")
+      option = List.replace_at(option, 13, index_of!(@arrow_skins, Map.fetch!(profile, "arrow_skin")))
+      option = List.replace_at(option, 14, index_of!(@screen_filters, Map.fetch!(profile, "filter")))
+      option = List.replace_at(option, 15, index_of!(@guidelines, Map.fetch!(profile, "guideline")))
+      option = List.replace_at(option, 17, index_of!(@priorities, Map.fetch!(profile, "priority")))
+      option = List.replace_at(option, 18, index_of!(@timing_disps, Map.fetch!(profile, "timing_disp")))
+      option_load = Enum.map_join(option, ",", &to_string/1)
 
-        option = profile |> Map.fetch!("option") |> String.split(",")
-        option = List.replace_at(option, 13, index_of!(@arrow_skins, Map.fetch!(profile, "arrow_skin")))
-        option = List.replace_at(option, 14, index_of!(@screen_filters, Map.fetch!(profile, "filter")))
-        option = List.replace_at(option, 15, index_of!(@guidelines, Map.fetch!(profile, "guideline")))
-        option = List.replace_at(option, 17, index_of!(@priorities, Map.fetch!(profile, "priority")))
-        option = List.replace_at(option, 18, index_of!(@timing_disps, Map.fetch!(profile, "timing_disp")))
-        option_load = Enum.map_join(option, ",", &to_string/1)
+      rival = profile |> Map.fetch!("rival") |> String.split(",")
 
-        rival = profile |> Map.fetch!("rival") |> String.split(",")
+      rival_ids = [
+        Map.get(profile, "rival_1_ddr_id", 0),
+        Map.get(profile, "rival_2_ddr_id", 0),
+        Map.get(profile, "rival_3_ddr_id", 0)
+      ]
 
-        rival_ids = [
-          Map.get(profile, "rival_1_ddr_id", 0),
-          Map.get(profile, "rival_2_ddr_id", 0),
-          Map.get(profile, "rival_3_ddr_id", 0)
-        ]
+      rival =
+        rival_ids
+        |> Enum.with_index(3)
+        |> Enum.reduce(rival, fn {r, idx}, acc ->
+          if r != 0 do
+            acc
+            |> List.replace_at(idx, idx - 2)
+            |> List.replace_at(idx + 8, get_common(r, game_version, 4))
+          else
+            acc
+          end
+        end)
 
-        rival =
-          rival_ids
-          |> Enum.with_index(3)
-          |> Enum.reduce(rival, fn {r, idx}, acc ->
-            if r != 0 do
-              acc
-              |> List.replace_at(idx, idx - 2)
-              |> List.replace_at(idx + 8, get_common(r, game_version, 4))
-            else
-              acc
-            end
-          end)
+      rival_load = Enum.map_join(rival, ",", &to_string/1)
 
-        rival_load = Enum.map_join(rival, ",", &to_string/1)
+      load = [
+        common_load |> String.split("ffffffff,COMMON,") |> Enum.fetch!(1) |> Base.encode64(),
+        option_load |> String.split("ffffffff,OPTION,") |> Enum.fetch!(1) |> Base.encode64(),
+        profile |> Map.fetch!("last") |> String.split("ffffffff,LAST,") |> Enum.fetch!(1) |> Base.encode64(),
+        rival_load |> String.split("ffffffff,RIVAL,") |> Enum.fetch!(1) |> Base.encode64()
+      ]
 
-        [
-          common_load |> String.split("ffffffff,COMMON,") |> Enum.fetch!(1) |> Base.encode64(),
-          option_load |> String.split("ffffffff,OPTION,") |> Enum.fetch!(1) |> Base.encode64(),
-          profile |> Map.fetch!("last") |> String.split("ffffffff,LAST,") |> Enum.fetch!(1) |> Base.encode64(),
-          rival_load |> String.split("ffffffff,RIVAL,") |> Enum.fetch!(1) |> Base.encode64()
-        ]
-      end
-
-    response =
-      E.e("response",
-        E.e("playerdata_2", [
-          E.e("result", 0, __type: "s32"),
-          E.e("player", [
-            E.e("record", for(p <- load, do: E.e("d", p, __type: "str"))),
-            E.e("record_num", 4, __type: "u32")
+      response =
+        E.e("response",
+          E.e("playerdata_2", [
+            E.e("result", 0, __type: "s32"),
+            E.e("player", [
+              E.e("record", for(p <- load, do: E.e("d", p, __type: "str"))),
+              E.e("record_num", 4, __type: "u32")
+            ])
           ])
-        ])
-      )
+        )
 
-    Core.send_response(conn, info, response)
+      Core.send_response(conn, info, response)
+    end
   end
 
   def playerdata_2_usergamedata_send(conn) do
