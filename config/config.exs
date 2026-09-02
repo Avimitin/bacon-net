@@ -9,3 +9,7 @@ config :bacon_net,
   maintenance_mode: false
 
 config :logger, level: :info
+
+if File.exists?(Path.expand("#{config_env()}.exs", __DIR__)) do
+  import_config "#{config_env()}.exs"
+end

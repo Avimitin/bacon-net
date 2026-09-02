@@ -8,6 +8,7 @@
 
 # Runtime data
 /db.json
+/test_db.json
 /webui/
 *.xml
 !/test/fixtures/*.xml
