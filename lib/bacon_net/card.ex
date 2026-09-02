@@ -87,8 +87,7 @@ defmodule BaconNet.Card do
   end
 
   @doc "Convert a 16-char Konami ID back to the 16-hex-char card UID."
-  def to_uid(konami_id) when byte_size(konami_id) == 16 do
-    card_type =
+  def to_uid(konami_id) when byte_size(konami_id) == 16 do    card_type =
       case String.at(konami_id, 14) do
         "1" -> 1
         "2" -> 2
@@ -138,5 +137,51 @@ defmodule BaconNet.Card do
     end
 
     card_id
+  end
+
+  @doc """
+  Normalize user-provided card input (card UID or Konami ID, tolerant of
+  common lookalike characters) to `%{"uid" => _, "konami_id" => _}`.
+  Returns nil when the input cannot be parsed.
+  """
+  def normalize(input) when is_binary(input) do
+    card =
+      input
+      |> String.upcase()
+      |> String.replace("I", "1")
+      |> String.replace("O", "0")
+      |> String.replace("Q", "0")
+      |> String.replace("V", "U")
+
+    if String.starts_with?(card, "E004") or String.starts_with?(card, "012E") do
+      uid = card |> :binary.bin_to_list() |> Enum.filter(&(&1 in ~c"0123456789ABCDEF")) |> IO.iodata_to_binary()
+
+      case to_konami_id_safe(uid) do
+        {:ok, kid} -> %{"uid" => uid, "konami_id" => kid}
+        :error -> nil
+      end
+    else
+      valid = @valid_characters |> :binary.bin_to_list()
+      kid = card |> :binary.bin_to_list() |> Enum.filter(&(&1 in valid)) |> IO.iodata_to_binary()
+
+      case to_uid_safe(kid) do
+        {:ok, uid} -> %{"uid" => uid, "konami_id" => kid}
+        :error -> nil
+      end
+    end
+  end
+
+  def normalize(_), do: nil
+
+  defp to_konami_id_safe(uid) do
+    {:ok, to_konami_id(uid)}
+  rescue
+    _ -> :error
+  end
+
+  defp to_uid_safe(kid) do
+    {:ok, to_uid(kid)}
+  rescue
+    _ -> :error
   end
 end
