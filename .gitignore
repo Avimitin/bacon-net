@@ -18,6 +18,11 @@
 /.nix-hex/
 /.elixir_ls/
 
+# Frontend
+/frontend/node_modules/
+/frontend/dist/
+/priv/static/
+
 # OS noise
 .DS_Store
 /result
