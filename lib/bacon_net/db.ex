@@ -35,6 +35,30 @@ defmodule BaconNet.DB do
   def search_with_ids(table, conds) when is_map(conds),
     do: GenServer.call(__MODULE__, {:search_with_ids, table, conds})
 
+  @doc "All documents in `table`, as {doc_id, doc} pairs."
+  def all_with_ids(table), do: GenServer.call(__MODULE__, {:all_with_ids, table})
+
+  @doc "Document in `table` with the given doc id, or nil."
+  def get_by_id(table, id), do: GenServer.call(__MODULE__, {:get_by_id, table, id})
+
+  @doc "Insert a document. Returns {doc_id, doc}."
+  def insert_with_id(table, doc) when is_map(doc),
+    do: GenServer.call(__MODULE__, {:insert_with_id, table, doc})
+
+  @doc "Replace the document with the given doc id entirely. Returns :ok or :not_found."
+  def replace_by_id(table, id, doc) when is_map(doc),
+    do: GenServer.call(__MODULE__, {:replace_by_id, table, id, doc})
+
+  @doc "Merge `fields` into the document with the given doc id. Returns :ok or :not_found."
+  def update_by_id(table, id, fields) when is_map(fields),
+    do: GenServer.call(__MODULE__, {:update_by_id, table, id, fields})
+
+  @doc "Remove the document with the given doc id. Returns :ok or :not_found."
+  def remove_by_id(table, id), do: GenServer.call(__MODULE__, {:remove_by_id, table, id})
+
+  @doc "All table names with their document counts, sorted by name."
+  def tables, do: GenServer.call(__MODULE__, :tables)
+
   @doc "Drop an entire table."
   def drop_table(table), do: GenServer.call(__MODULE__, {:drop_table, table})
 
@@ -104,6 +128,63 @@ defmodule BaconNet.DB do
       |> Enum.filter(fn {_id, d} -> matches?(d, conds) end)
 
     {:reply, result, data}
+  end
+
+  def handle_call({:all_with_ids, table}, _from, data) do
+    {:reply, data |> Map.get(table, %{}) |> sorted_pairs(), data}
+  end
+
+  def handle_call({:get_by_id, table, id}, _from, data) do
+    {:reply, get_in(data, [table, id]), data}
+  end
+
+  def handle_call({:insert_with_id, table, doc}, _from, data) do
+    docs = Map.get(data, table, %{})
+    id = next_id(docs)
+    data = put_in(data, [Access.key(table, %{}), Integer.to_string(id)], doc)
+    persist(data)
+    {:reply, {Integer.to_string(id), doc}, data}
+  end
+
+  def handle_call({:replace_by_id, table, id, doc}, _from, data) do
+    if get_in(data, [table, id]) do
+      data = put_in(data, [table, id], doc)
+      persist(data)
+      {:reply, :ok, data}
+    else
+      {:reply, :not_found, data}
+    end
+  end
+
+  def handle_call({:update_by_id, table, id, fields}, _from, data) do
+    case get_in(data, [table, id]) do
+      nil ->
+        {:reply, :not_found, data}
+
+      existing ->
+        data = put_in(data, [table, id], Map.merge(existing, fields))
+        persist(data)
+        {:reply, :ok, data}
+    end
+  end
+
+  def handle_call({:remove_by_id, table, id}, _from, data) do
+    if get_in(data, [table, id]) do
+      data = update_in(data, [table], &Map.delete(&1, id))
+      persist(data)
+      {:reply, :ok, data}
+    else
+      {:reply, :not_found, data}
+    end
+  end
+
+  def handle_call(:tables, _from, data) do
+    tables =
+      data
+      |> Enum.map(fn {table, docs} -> {table, map_size(docs)} end)
+      |> Enum.sort()
+
+    {:reply, tables, data}
   end
 
   def handle_call({:drop_table, table}, _from, data) do
