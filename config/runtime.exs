@@ -33,4 +33,8 @@ if config_env() == :prod do
   if webui_dir = System.get_env("BACON_WEBUI_DIR") do
     config :bacon_net, webui_dir: webui_dir
   end
+
+  if admin_token = System.get_env("BACON_ADMIN_TOKEN") do
+    config :bacon_net, admin_token: admin_token
+  end
 end

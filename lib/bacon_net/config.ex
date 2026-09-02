@@ -13,6 +13,9 @@ defmodule BaconNet.Config do
     Application.get_env(:bacon_net, :ip) || detect_ip()
   end
 
+  @doc "Bearer token protecting /manage/api; nil means open (development default)."
+  def admin_token, do: Application.get_env(:bacon_net, :admin_token)
+
   @doc "Directory the static webui is served from (priv/static unless overridden)."
   def webui_dir do
     Application.get_env(:bacon_net, :webui_dir) ||
