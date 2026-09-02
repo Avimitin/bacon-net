@@ -20,3 +20,5 @@
 
 # OS noise
 .DS_Store
+/result
+/result-*
