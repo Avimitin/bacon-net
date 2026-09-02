@@ -6,6 +6,7 @@ export default defineConfig({
     proxy: {
       "/manage": "http://localhost:8000",
       "/config": "http://localhost:8000",
+      "/account": "http://localhost:8000",
     },
   },
 });
