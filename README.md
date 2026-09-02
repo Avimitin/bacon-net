@@ -8,14 +8,14 @@ players — an Elixir rewrite of [MonkeyBusiness](https://github.com/drmext/Monk
 Monorepo layout:
 
 - `/` — Elixir server (Bandit/Plug, no Phoenix); game protocol, JSON APIs,
-  TinyDB-compatible store
+  PostgreSQL-backed document store (Ecto)
 - `frontend/` — pure static webui (Vite + React +
   [Carbon](https://react.carbondesignsystem.com/)) for browsing and editing
   user data, served by the server under `/webui`
 
-All binary dependencies (Elixir, Erlang/OTP, Node.js/npm, mix/hex tooling)
-are managed by [Nix](https://nixos.org/) via the included flake; only a
-working `nix` command is required.
+All binary dependencies (Elixir, Erlang/OTP, Node.js/npm, PostgreSQL,
+mix/hex tooling) are managed by [Nix](https://nixos.org/) via the included
+flake; only a working `nix` command is required.
 
 ## Usage
 
@@ -42,8 +42,33 @@ nix build
 
 The release root in `/nix/store` is read-only, so runtime state (run_erl
 pipes/logs) goes to `/tmp/bacon_net` by default; override with
-`RELEASE_TMP=/some/dir` if needed. The database is a `db.json` in the
-directory you start the release from.
+`RELEASE_TMP=/some/dir` if needed.
+
+## Database
+
+All durable state lives in PostgreSQL. A write is acknowledged only after
+the database commits; there is no in-memory authoritative copy.
+
+- **Dev/test**: the server bootstraps a throwaway local cluster
+  automatically (initdb/pg_ctl from the dev shell; data in
+  `/tmp/bacon-net-pg-{dev,test}`) and runs migrations on boot.
+- **Production**: set `DATABASE_URL=postgres://...` and run migrations
+  explicitly before starting new nodes:
+
+  ```sh
+  ./result/bin/bacon_net eval "BaconNet.Release.migrate()"
+  ```
+
+- **Importing a MonkeyBusiness/TinyDB `db.json`**:
+
+  ```sh
+  nix develop
+  mix bacon_net.import_json path/to/db.json   # re-runnable; skips existing rows
+  ```
+
+- **Backups**: use `pg_dump` / WAL archiving from your PostgreSQL
+  deployment; rehearse restores (`pg_restore` or PITR) regularly. The
+  server itself keeps no state worth backing up.
 
 The built-in web interface for managing user data lives at
 `http://localhost:8000/webui/` (see `frontend/README.md` for development).
@@ -55,6 +80,9 @@ In releases, override via environment (`config/runtime.exs`):
 
 | Variable                     | Default              |
 | ---------------------------- | -------------------- |
+| `DATABASE_URL`               | **required in prod** |
+| `BACON_DB_POOL_SIZE`         | `10`                 |
+| `BACON_PUBLIC_URL`           | `http://<ip>:<port>` |
 | `BACON_PORT`                 | `8000`               |
 | `BACON_IP`                   | auto-detected        |
 | `BACON_ARCADE`               | `Ｍ０ＮＫＹＢＵＳ１Ｎ３Ｚ` |
@@ -66,8 +94,21 @@ In releases, override via environment (`config/runtime.exs`):
 | `BACON_ADMIN_TOKEN`          | unset (API closed)   |
 | `BACON_MAX_DECOMPRESSED_BODY` | `16000000`          |
 | `BACON_CORS_ORIGINS`         | none (comma-separated allowlist) |
+| `BACON_LEGACY_GAME_APIS`     | `0` (legacy per-game JSON APIs off) |
+| `RELEASE_COOKIE`             | generated per build  |
 
-The database is a TinyDB-compatible `db.json` in the working directory.
+Durable state lives in PostgreSQL (see "Database"); there is no `db.json`
+anymore.
+
+## Ops endpoints
+
+- `GET /healthz` — liveness, always 200
+- `GET /readyz` — 200 only when the database is reachable, else 503
+- `GET /metrics` — Prometheus text (request/DB/decode/reject counters);
+  requires the admin bearer token
+
+Every request carries an `x-request-id` (honored if supplied, generated
+otherwise) that appears in logs and the response headers.
 
 ## Management API
 
@@ -80,7 +121,8 @@ only be bound to one account), and then see only their own data: profiles
 and settings per game (merge-patch editing; a profile's `card` can never be
 reassigned through the API), their score history, and server-wide rankings.
 
-**Operator API (`/manage/api`)** — generic CRUD over every DB table:
+**Operator API (`/manage/api`)** — generic CRUD over document tables plus
+cabinet lifecycle, user moderation, and an audit trail:
 
 - `GET /manage/api/tables` — every DB table with document counts
 - `GET /manage/api/cards` — all documents with a `card` field, grouped by card
@@ -92,6 +134,12 @@ reassigned through the API), their score history, and server-wide rankings.
 - `DELETE /manage/api/shops/{pcbid}` — remove a shop entirely
 - `GET /manage/api/users` — player accounts (credentials are never exposed)
 - `POST /manage/api/users/{username}/ban` / `.../unban` — ban (kills live sessions) / unban
+- `GET /manage/api/audit?limit=&cursor=` — paginated audit events for every
+  admin mutation (actor, action, target, outcome, request id)
+
+The credential-bearing tables (`webui_users`, `webui_sessions`) are refused
+by the generic table routes; the curated endpoints above are the only
+access. Every mutation is recorded in the audit trail.
 
 Documents are returned with their TinyDB id inlined as `_id`.
 
@@ -101,13 +149,15 @@ The server supports multiple shops, identified by the cabinet's PCBID (the
 `srcid` attribute on every e-amusement request). A cabinet can only connect
 when its PCBID is permitted:
 
-- Game connections without a PCBID, or with an unknown/revoked PCBID, are
-  rejected with a protocol-level error (`status="1"`).
-- Unknown PCBIDs are remembered as *pending* shops (`shop` table,
-  `"permitted": false`) so the operator can approve them from the Admin →
-  Shops page (or `POST /manage/api/shops/{pcbid}/permit`).
-- Only shop documents with `"permitted": true` can connect; anything else
-  (missing, false, or absent flag) is rejected.
+- Game connections without a PCBID, or with an unknown/pending/revoked
+  PCBID, are rejected with a protocol-level error (`status="1"`).
+- Unknown PCBIDs are remembered as *pending* cabinets so the operator can
+  approve them from the Admin → Shops page (or
+  `POST /manage/api/shops/{pcbid}/permit`).
+- Cabinets live under shops, which live under networks (the tenancy
+  schema); every request resolves its cabinet and carries a trusted
+  `RequestContext` — the body-supplied PCBID selects the cabinet record
+  but grants nothing by itself.
 - Shops and player accounts are separate scopes: a shop permission only
   allows cabinets to connect, and players keep full access to their own
   cards regardless of which shop they played at.
@@ -141,9 +191,11 @@ not implemented.
 
 - `mix mdb --input music_data.bin --output songs.json --extract`
   (`--create`, `--merge [--diff]`) — music_data.bin tool
-- `mix import.iidx_automap --automap_xml X --version 30 --monkey_db db.json --iidx_id N`
-- `mix import.ddr_automap --automap_xml X --version 3 --monkey_db db.json --ddr_id N`
-- `mix db.trim [db.json]`
+- `mix bacon_net.import_json [db.json]` — import a TinyDB db.json into
+  PostgreSQL (re-runnable)
+- `mix import.iidx_automap --automap_xml X --version 30 --iidx_id N`
+- `mix import.ddr_automap --automap_xml X --version 3 --ddr_id N`
+- `mix db.trim`
 
 ## Development
 

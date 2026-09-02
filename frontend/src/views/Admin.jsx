@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   Tabs,
   TabList,
@@ -16,6 +16,7 @@ import {
   Dropdown,
   Search,
   Modal,
+  Pagination,
   DataTable,
   Table,
   TableHead,
@@ -55,6 +56,7 @@ export default function Admin() {
           <Tab>Tables</Tab>
           <Tab>Docs</Tab>
           <Tab>Cards</Tab>
+          <Tab>Audit</Tab>
         </TabList>
         <TabPanels>
           <TabPanel>
@@ -71,6 +73,9 @@ export default function Admin() {
           </TabPanel>
           <TabPanel>
             <CardsPanel onLock={lock} />
+          </TabPanel>
+          <TabPanel>
+            <AuditPanel onLock={lock} />
           </TabPanel>
         </TabPanels>
       </Tabs>
@@ -975,6 +980,134 @@ function CardsPanel({ onLock }) {
           </Stack>
         </Tile>
       ))}
+    </Stack>
+  );
+}
+
+// ---------- Audit trail (cursor-paginated) ----------
+
+const AUDIT_HEADERS = [
+  { key: "created_at", header: "When" },
+  { key: "actor", header: "Actor" },
+  { key: "action", header: "Action" },
+  { key: "target", header: "Target" },
+  { key: "outcome", header: "Outcome" },
+  { key: "request_id", header: "Request" },
+];
+
+const AUDIT_PAGE_SIZES = [25, 50, 100, 200];
+
+function AuditPanel({ onLock }) {
+  const [events, setEvents] = useState(null);
+  const [error, setError] = useState(null);
+  const [page, setPage] = useState(1);
+  const [pageSize, setPageSize] = useState(50);
+  const [nextCursor, setNextCursor] = useState(null);
+  const cursors = useRef({ 1: null }); // page -> cursor it was fetched with
+
+  useEffect(() => {
+    if (page > 1 && !(page in cursors.current)) {
+      setPage(1);
+      return;
+    }
+    setEvents(null);
+    api
+      .audit({ limit: pageSize, cursor: cursors.current[page] })
+      .then((d) => {
+        setEvents(d.events || []);
+        setNextCursor(d.next_cursor ?? null);
+        if (d.next_cursor) cursors.current[page + 1] = d.next_cursor;
+        else delete cursors.current[page + 1];
+      })
+      .catch((err) => adminCatch(err, onLock, setError));
+  }, [page, pageSize]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const onPageChange = ({ page: nextPage, pageSize: nextSize }) => {
+    if (nextSize !== pageSize) {
+      cursors.current = { 1: null };
+      setPageSize(nextSize);
+      setPage(1);
+    } else {
+      setPage(nextPage);
+    }
+  };
+
+  if (error) return <PanelError title="Could not load the audit trail" error={error} />;
+  if (!events) return <PanelSkeleton />;
+
+  const rows = events.map((e) => ({
+    id: String(e.id),
+    created_at: fmtTs(e.created_at),
+    actor: e.actor ?? "—",
+    action: (
+      <Tag type="cool-gray" size="sm">
+        {e.action}
+      </Tag>
+    ),
+    target: <span style={{ fontFamily: "monospace" }}>{e.target ?? "—"}</span>,
+    outcome:
+      e.outcome === "ok" ? (
+        <Tag type="green" size="sm">
+          ok
+        </Tag>
+      ) : (
+        <Tag type="red" size="sm">
+          {e.outcome ?? "—"}
+        </Tag>
+      ),
+    request_id: (
+      <span style={{ fontFamily: "monospace", fontSize: "0.75rem" }}>{e.request_id ?? "—"}</span>
+    ),
+  }));
+
+  return (
+    <Stack gap={5} style={{ paddingTop: "1rem" }}>
+      <h3>Audit trail</h3>
+      <p style={{ color: "var(--cds-text-secondary)", fontSize: "0.875rem" }}>
+        Administrative mutations, newest first.
+      </p>
+      {events.length ? (
+        <DataTable rows={rows} headers={AUDIT_HEADERS}>
+          {({ rows, headers, getTableProps, getHeaderProps, getRowProps }) => (
+            <TableContainer>
+              <Table {...getTableProps()} size="sm">
+                <TableHead>
+                  <TableRow>
+                    {headers.map((h) => (
+                      <TableHeader key={h.key} {...getHeaderProps({ header: h })}>
+                        {h.header}
+                      </TableHeader>
+                    ))}
+                  </TableRow>
+                </TableHead>
+                <TableBody>
+                  {rows.map((row) => (
+                    <TableRow key={row.id} {...getRowProps({ row })}>
+                      {row.cells.map((cell) => (
+                        <TableCell key={cell.id}>{cell.value}</TableCell>
+                      ))}
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </TableContainer>
+          )}
+        </DataTable>
+      ) : (
+        <InlineNotification kind="info" title="No audit events yet" hideCloseButton lowContrast />
+      )}
+      <Pagination
+        id="audit-pagination"
+        page={page}
+        pageSize={pageSize}
+        pageSizes={AUDIT_PAGE_SIZES}
+        pagesUnknown
+        isLastPage={!nextCursor}
+        itemsPerPageText="Events per page"
+        backwardText="Previous page"
+        forwardText="Next page"
+        onChange={onPageChange}
+      />
     </Stack>
   );
 }

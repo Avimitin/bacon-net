@@ -33,7 +33,6 @@ export default function Settings() {
   const [doc, setDoc] = useState(null);
   const [game, setGame] = useState(null);
   const [loadError, setLoadError] = useState(null);
-  const [name, setName] = useState("");
   const [pin, setPin] = useState("");
   const [work, setWork] = useState({});
   const [versions, setVersions] = useState([]);
@@ -47,7 +46,6 @@ export default function Settings() {
       .then(([docData, games]) => {
         setDoc(docData);
         setGame(gameForProfileTable(games, table));
-        setName(docData.name ?? "");
         setPin(String(docData.pin ?? ""));
         const clone = structuredClone(docData.version || {});
         setWork(clone);
@@ -108,6 +106,10 @@ export default function Settings() {
 
   const save = async () => {
     setNotice(null);
+    if (pin && !/^\d{4}$/.test(pin)) {
+      setNotice({ kind: "error", text: "PIN must be exactly 4 digits." });
+      return;
+    }
     let workToSave = work;
     if (activeVer != null && work[activeVer] != null && typeof work[activeVer] === "object") {
       const serialized = JSON.stringify(work[activeVer], null, 2);
@@ -123,12 +125,9 @@ export default function Settings() {
     }
 
     const patch = {};
-    if (name !== (doc.name ?? "")) patch.name = name;
-    if (pin !== String(doc.pin ?? "")) {
-      patch.pin = typeof doc.pin === "number" ? Number(pin) : pin;
-    }
+    if (pin !== String(doc.pin ?? "")) patch.pin = pin; // always the 4-digit string
     if (JSON.stringify(workToSave) !== JSON.stringify(doc.version || {})) {
-      patch.version = workToSave; // server merges top-level only — send the whole map
+      patch.version = workToSave; // server merges per version key — send the whole map
     }
 
     if (!Object.keys(patch).length) {
@@ -178,8 +177,9 @@ export default function Settings() {
               <TextInput
                 id="profile-name"
                 labelText="Player name"
-                value={name}
-                onChange={(e) => setName(e.target.value)}
+                value={profileName(work) ?? "—"}
+                readOnly
+                helperText="Set by the game — not editable here."
               />
             </Column>
             <Column sm={4} md={4} lg={6}>
@@ -189,6 +189,8 @@ export default function Settings() {
                 value={pin}
                 maxLength={4}
                 inputMode="numeric"
+                invalid={Boolean(pin) && !/^\d{4}$/.test(pin)}
+                invalidText="PIN must be exactly 4 digits"
                 onChange={(e) => setPin(e.target.value)}
                 style={{ fontFamily: "monospace" }}
               />
@@ -283,6 +285,14 @@ export default function Settings() {
       )}
     </Stack>
   );
+}
+
+function profileName(versions) {
+  const entries = Object.entries(versions || {})
+    .filter(([k, v]) => v && typeof v === "object")
+    .sort(([a], [b]) => Number(a) - Number(b));
+  const latest = entries[entries.length - 1];
+  return latest ? (latest[1].name ?? latest[1].djname ?? null) : null;
 }
 
 function IidxField({ def, value, onChange }) {

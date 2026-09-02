@@ -87,7 +87,7 @@ end
 * If an attribute is literally named `type`, write `type: v` — it does not
   collide with the reserved `:__type`.
 
-## Database (TinyDB → BaconNet.DB)
+## Database (TinyDB → BaconNet.DB over PostgreSQL)
 
 | Python | Elixir |
 |--------|--------|
@@ -101,6 +101,15 @@ end
 
 Documents are maps with string keys, exactly like the TinyDB JSON.
 `profile.get("key", default)` → `Map.get(profile, "key", default)`.
+
+The store is PostgreSQL (see lib/bacon_net/db.ex): documents are JSONB rows
+keyed by `{table, doc_id}`, conditions compile to exact per-field JSONB
+equality, and `DB.transaction(fn -> ... end)` groups multi-step flows into
+one atomic commit. Normalized data (accounts, cards, sessions, tenancy,
+score attempts/bests, the wallet ledger, audit events) lives in real tables
+behind the `BaconNet.Accounts`, `BaconNet.Tenancy`, `BaconNet.Scores`,
+`BaconNet.Wallet`, and `BaconNet.Audit` contexts — prefer those over raw
+document tables for anything with an ownership or money invariant.
 
 ## Misc Python → Elixir
 

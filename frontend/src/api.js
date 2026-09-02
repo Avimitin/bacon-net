@@ -1,6 +1,13 @@
-// API layer: player session, admin token, game metadata, typed fetch wrapper.
+// API layer: player session (HttpOnly cookie), admin token, game metadata,
+// typed fetch wrapper.
+//
+// Player auth rides on the `bacon_session` HttpOnly cookie set by
+// /account/api/login (and /register). The token itself is never stored in
+// the browser: non-browser clients can still send `Authorization: Bearer`
+// (login keeps returning it in the JSON body). Cookie-authenticated
+// mutations must carry the X-CSRF-Requested-With header; we send it on
+// every non-GET request, which header-authenticated requests tolerate.
 
-const PLAYER_KEY = "bn.player";
 const ADMIN_KEY = "bn.admin";
 const KONAMI_KEY = "bn.konami";
 
@@ -14,17 +21,6 @@ export class ApiError extends Error {
 }
 
 export const tokens = {
-  get player() {
-    try {
-      return JSON.parse(localStorage.getItem(PLAYER_KEY));
-    } catch {
-      return null;
-    }
-  },
-  set player(session) {
-    if (session) localStorage.setItem(PLAYER_KEY, JSON.stringify(session));
-    else localStorage.removeItem(PLAYER_KEY);
-  },
   get admin() {
     return localStorage.getItem(ADMIN_KEY) || null;
   },
@@ -61,13 +57,17 @@ export const konamiCache = {
 
 const enc = encodeURIComponent;
 
-async function request(path, { method = "GET", body, token, admin = false } = {}) {
+async function request(path, { method = "GET", body, token, admin = false, signal } = {}) {
   const headers = {};
   if (body !== undefined) headers["Content-Type"] = "application/json";
   if (token) headers["Authorization"] = `Bearer ${token}`;
+  // CSRF guard for cookie-authenticated mutations (exempt for header auth).
+  if (method !== "GET") headers["X-CSRF-Requested-With"] = "fetch";
   const res = await fetch(path, {
     method,
     headers,
+    credentials: "same-origin",
+    signal,
     body: body !== undefined ? JSON.stringify(body) : undefined,
   });
   if (res.status === 204) return null;
@@ -85,10 +85,18 @@ async function request(path, { method = "GET", body, token, admin = false } = {}
   return data;
 }
 
-const playerCall = (path, opts = {}) =>
-  request(path, { ...opts, token: tokens.player?.token });
+const playerCall = (path, opts = {}) => request(path, opts);
 const adminCall = (path, opts = {}) =>
   request(path, { ...opts, token: tokens.admin, admin: true });
+
+const query = (params) => {
+  const q = new URLSearchParams();
+  for (const [key, value] of Object.entries(params)) {
+    if (value !== undefined && value !== null && value !== "") q.set(key, value);
+  }
+  const s = q.toString();
+  return s ? `?${s}` : "";
+};
 
 export const api = {
   // ---- account / player ----
@@ -108,8 +116,10 @@ export const api = {
       method: "PATCH",
       body: patch,
     }),
-  myScores: () => playerCall("/account/api/scores"),
-  rankings: () => playerCall("/account/api/rankings"),
+  myScores: ({ limit, cursor, signal } = {}) =>
+    playerCall(`/account/api/scores${query({ limit, cursor })}`, { signal }),
+  rankings: ({ game, song, chart, limit, signal }) =>
+    playerCall(`/account/api/rankings${query({ game, song, chart, limit })}`, { signal }),
 
   // ---- admin (operator token) ----
   config: () => request("/config"),
@@ -143,6 +153,9 @@ export const api = {
   banUser: (username) => adminCall(`/manage/api/users/${enc(username)}/ban`, { method: "POST" }),
   unbanUser: (username) =>
     adminCall(`/manage/api/users/${enc(username)}/unban`, { method: "POST" }),
+
+  // ---- admin: audit trail ----
+  audit: ({ limit, cursor } = {}) => adminCall(`/manage/api/audit${query({ limit, cursor })}`),
 };
 
 // ---- game metadata (public, cached) ----

@@ -1,6 +1,8 @@
 import { useEffect, useState } from "react";
+import { useSearchParams } from "react-router";
 import {
   Dropdown,
+  ComboBox,
   DataTable,
   Table,
   TableHead,
@@ -10,14 +12,13 @@ import {
   TableCell,
   TableContainer,
   Tag,
-  Tile,
   Stack,
+  InlineLoading,
   InlineNotification,
-  Search,
   SkeletonText,
   SkeletonPlaceholder,
 } from "@carbon/react";
-import { api, getGames } from "../api.js";
+import { api, getGames, scoreTableMeta } from "../api.js";
 import { useAuthFailure } from "../session.jsx";
 import { gameIcon } from "../gameIcons.js";
 import { fmtDate, compare, humanError } from "../util.js";
@@ -25,41 +26,115 @@ import { fmtDate, compare, humanError } from "../util.js";
 const HEADERS = [
   { key: "rank", header: "Rank" },
   { key: "name", header: "Player" },
-  { key: "chart", header: "Chart" },
   { key: "score", header: "Score" },
   { key: "timestamp", header: "Date" },
 ];
 
+const LIMITS = [10, 25, 50, 100];
+const isInt = (s) => /^\d+$/.test(s);
+
 export default function Rankings() {
   const authFailure = useAuthFailure();
-  const [data, setData] = useState(null);
-  const [error, setError] = useState(null);
-  const [groupIdx, setGroupIdx] = useState(0);
-  const [songQuery, setSongQuery] = useState("");
+  const [searchParams, setSearchParams] = useSearchParams();
+
+  const game = searchParams.get("game") || "";
+  const song = searchParams.get("song") || "";
+  const chart = searchParams.get("chart") || "";
+  const limit = LIMITS.includes(Number(searchParams.get("limit")))
+    ? Number(searchParams.get("limit"))
+    : 50;
+
+  const [gamesMeta, setGamesMeta] = useState(null);
+  const [myIds, setMyIds] = useState(new Map()); // game key -> Set of game_id strings
+  const [loadError, setLoadError] = useState(null);
+  const [ownRows, setOwnRows] = useState([]); // own best-table rows, song/chart suggestions
+  const [board, setBoard] = useState(null); // leaderboard response
+  const [boardLoading, setBoardLoading] = useState(false);
+  const [boardError, setBoardError] = useState(null);
+
+  const setParams = (updates) => {
+    const next = new URLSearchParams(searchParams);
+    for (const [key, value] of Object.entries(updates)) {
+      if (value === "" || value === null) next.delete(key);
+      else next.set(key, String(value));
+    }
+    setSearchParams(next, { replace: true });
+  };
 
   useEffect(() => {
-    Promise.all([api.rankings(), api.profiles(), getGames()])
-      .then(([{ games: rankGames }, { profiles }, gamesMeta]) => {
-        setData({ rankGames, myIds: new Set(profiles.map((p) => String(p.game_id))), gamesMeta });
+    Promise.all([getGames(), api.profiles()])
+      .then(([games, { profiles }]) => {
+        const ids = new Map();
+        for (const p of profiles) {
+          if (p.game_id == null) continue;
+          if (!ids.has(p.game)) ids.set(p.game, new Set());
+          ids.get(p.game).add(String(p.game_id));
+        }
+        setGamesMeta(games);
+        setMyIds(ids);
       })
       .catch((err) => {
-        if (!authFailure(err)) setError(humanError(err));
+        if (!authFailure(err)) setLoadError(humanError(err));
       });
   }, []); // eslint-disable-line react-hooks/exhaustive-deps
 
-  if (error) {
+  const gameMeta = gamesMeta?.find((g) => g.key === game) ?? null;
+  const bestTable = gameMeta?.score_tables?.find((t) => t.kind === "best") ?? null;
+
+  // Seed song/chart suggestions from the player's own best-table rows.
+  useEffect(() => {
+    setOwnRows([]);
+    if (!gameMeta || !bestTable) return;
+    const controller = new AbortController();
+    api
+      .myScores({ limit: 200, signal: controller.signal })
+      .then((d) => {
+        setOwnRows(
+          (d.items || []).filter((r) => r.game === game && r.table === bestTable.table)
+        );
+      })
+      .catch((err) => {
+        if (err?.name !== "AbortError" && !authFailure(err)) setLoadError(humanError(err));
+      });
+    return () => controller.abort();
+  }, [game]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  const selectionValid = game && isInt(song) && isInt(chart);
+
+  // Fetch the bounded leaderboard for exactly the current selection.
+  useEffect(() => {
+    setBoard(null);
+    setBoardError(null);
+    if (!selectionValid) return;
+    const controller = new AbortController();
+    setBoardLoading(true);
+    api
+      .rankings({ game, song, chart, limit, signal: controller.signal })
+      .then((d) => {
+        setBoard(d);
+        setBoardLoading(false);
+      })
+      .catch((err) => {
+        if (err?.name === "AbortError") return;
+        setBoardLoading(false);
+        if (!authFailure(err)) setBoardError(humanError(err));
+      });
+    return () => controller.abort();
+  }, [game, song, chart, limit]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (loadError) {
     return (
       <InlineNotification
         kind="error"
         title="Could not load rankings"
-        subtitle={error}
+        subtitle={loadError}
         hideCloseButton
         lowContrast
       />
     );
   }
 
-  if (!data) {
+  if (!gamesMeta) {
     return (
       <Stack gap={6} style={{ marginTop: "1rem" }}>
         <SkeletonText heading width="30%" />
@@ -68,40 +143,40 @@ export default function Rankings() {
     );
   }
 
-  const { rankGames, myIds, gamesMeta } = data;
+  const songField = bestTable?.song_field ?? "song";
+  const chartField = bestTable?.chart_field ?? "chart";
 
-  if (!rankGames.length) {
-    return (
-      <Stack gap={6} style={{ marginTop: "1rem" }}>
-        <h1>Rankings</h1>
-        <InlineNotification
-          kind="info"
-          title="No rankings yet"
-          subtitle="Top scores appear here once players set records."
-          hideCloseButton
-          lowContrast
-        />
-      </Stack>
-    );
-  }
+  const songIds = [...new Set(ownRows.map((r) => String(r[songField] ?? "")).filter(Boolean))].sort(
+    compare
+  );
+  const chartIds = [
+    ...new Set(
+      ownRows
+        .filter((r) => String(r[songField]) === song)
+        .map((r) => String(r[chartField] ?? ""))
+        .filter(Boolean)
+    ),
+  ].sort(compare);
 
-  const items = rankGames.map((g, i) => ({
+  const icon = game ? gameIcon(game) : null;
+  const mine = myIds.get(game) ?? new Set();
+
+  const entryRows = (board?.items || []).map((e, i) => ({
     id: String(i),
-    label: `${gamesMeta.find((m) => m.key === g.game)?.name ?? g.game} — ${g.table}`,
+    rank: e.rank,
+    name: (
+      <span style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem" }}>
+        {e.name ?? "—"}
+        {mine.has(String(e.game_id)) && (
+          <Tag type="green" size="sm">
+            you
+          </Tag>
+        )}
+      </span>
+    ),
+    score: String(e.score),
+    timestamp: fmtDate(e.timestamp),
   }));
-  const group = rankGames[groupIdx] ?? rankGames[0];
-  const icon = gameIcon(group.game);
-
-  const songs = new Map();
-  for (const e of group.entries || []) {
-    const key = String(e.song);
-    if (!songs.has(key)) songs.set(key, []);
-    songs.get(key).push(e);
-  }
-  const sortedSongs = [...songs.keys()].sort(compare);
-  const matchedSongs = songQuery
-    ? sortedSongs.filter((s) => s.toLowerCase().includes(songQuery)).slice(0, 20)
-    : [];
 
   return (
     <Stack gap={6} style={{ marginTop: "1rem" }}>
@@ -109,83 +184,90 @@ export default function Rankings() {
         Rankings
         {icon && <img src={icon} alt="" width={32} height={32} />}
       </h1>
-      <Dropdown
-        id="ranking-group"
-        titleText="Game / best-scores table"
-        label="Pick a game and table"
-        items={items}
-        itemToString={(item) => (item ? item.label : "")}
-        selectedItem={items[groupIdx] ?? items[0]}
-        onChange={({ selectedItem }) => {
-          if (selectedItem) {
-            setGroupIdx(Number(selectedItem.id));
-            setSongQuery("");
+      <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", alignItems: "flex-end" }}>
+        <Dropdown
+          id="ranking-game"
+          titleText="Game"
+          label="Pick a game"
+          items={gamesMeta}
+          itemToString={(item) => (item ? item.name : "")}
+          selectedItem={gameMeta}
+          onChange={({ selectedItem }) =>
+            setParams({ game: selectedItem?.key || null, song: null, chart: null })
           }
-        }}
-      />
-      {!sortedSongs.length && (
-        <InlineNotification
-          kind="info"
-          title="No entries in this table yet"
-          hideCloseButton
-          lowContrast
+          style={{ minWidth: "16rem" }}
         />
-      )}
-      {sortedSongs.length > 0 && (
-        <Search
+        <ComboBox
           id="ranking-song"
-          labelText="Find a song"
-          placeholder="type a song id to show its leaderboard…"
-          value={songQuery}
-          onChange={(e) => setSongQuery(e.target.value.toLowerCase())}
+          titleText="Song"
+          placeholder="song id — pick or type one"
+          items={songIds}
+          allowCustomValue
+          disabled={!game}
+          selectedItem={song || null}
+          onChange={({ selectedItem }) =>
+            setParams({ song: selectedItem ? String(selectedItem) : null, chart: null })
+          }
+          invalid={Boolean(song) && !isInt(song)}
+          invalidText="Song id must be a number"
+          style={{ minWidth: "12rem" }}
         />
-      )}
-      {sortedSongs.length > 0 && !songQuery && (
+        <ComboBox
+          id="ranking-chart"
+          titleText="Chart"
+          placeholder="chart id — pick or type one"
+          items={chartIds}
+          allowCustomValue
+          disabled={!song}
+          selectedItem={chart || null}
+          onChange={({ selectedItem }) =>
+            setParams({ chart: selectedItem ? String(selectedItem) : null })
+          }
+          invalid={Boolean(chart) && !isInt(chart)}
+          invalidText="Chart id must be a number"
+          style={{ minWidth: "10rem" }}
+        />
+        <Dropdown
+          id="ranking-limit"
+          titleText="Top"
+          label="50"
+          items={LIMITS}
+          itemToString={(item) => (item ? String(item) : "")}
+          selectedItem={limit}
+          onChange={({ selectedItem }) =>
+            setParams({ limit: selectedItem === 50 ? null : selectedItem })
+          }
+          style={{ minWidth: "7rem" }}
+        />
+      </div>
+
+      {!selectionValid && (
         <InlineNotification
           kind="info"
-          title="Search for a song to see its leaderboard"
-          subtitle={`${sortedSongs.length} songs in this table — leaderboards render once you narrow down to a song.`}
+          title="Pick a game, song, and chart"
+          subtitle="The leaderboard loads once all three are set. Song and chart suggestions come from your own records, but any id can be typed."
           hideCloseButton
           lowContrast
         />
       )}
-      {songQuery && !matchedSongs.length && (
+      {boardLoading && <InlineLoading description="Loading leaderboard…" />}
+      {boardError && (
         <InlineNotification
-          kind="info"
-          title="No songs match"
-          subtitle="Try a different song id."
+          kind="error"
+          title="Could not load the leaderboard"
+          subtitle={boardError}
           hideCloseButton
           lowContrast
         />
       )}
-      {matchedSongs.map((song) => {
-        const entries = songs
-          .get(song)
-          .slice()
-          .sort((a, b) => a.rank - b.rank);
-        const rows = entries.map((e, i) => ({
-          id: String(i),
-          rank: e.rank,
-          name: (
-            <span style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem" }}>
-              {e.name ?? "—"}
-              {myIds.has(String(e.game_id)) && (
-                <Tag type="green" size="sm">
-                  you
-                </Tag>
-              )}
-            </span>
-          ),
-          chart: e.chart != null ? String(e.chart) : "—",
-          score: String(e.score),
-          timestamp: fmtDate(e.timestamp),
-        }));
-        return (
-          <Tile key={song}>
-            <h3 style={{ marginBottom: "0.75rem" }}>
-              Song <span style={{ fontFamily: "monospace", color: "var(--cds-link-primary)" }}>{song}</span>
-            </h3>
-            <DataTable rows={rows} headers={HEADERS}>
+      {board && !boardError && (
+        <>
+          <p style={{ color: "var(--cds-text-secondary)", fontSize: "0.875rem" }}>
+            {gameMeta?.name ?? board.game} · song {board.song} · chart {board.chart} · top{" "}
+            {limit} of {scoreTableMeta(gamesMeta, game, board.table)?.kind ?? board.table}
+          </p>
+          {entryRows.length ? (
+            <DataTable rows={entryRows} headers={HEADERS}>
               {({ rows, headers, getTableProps, getHeaderProps, getRowProps }) => (
                 <TableContainer>
                   <Table {...getTableProps()} size="sm">
@@ -211,9 +293,17 @@ export default function Rankings() {
                 </TableContainer>
               )}
             </DataTable>
-          </Tile>
-        );
-      })}
+          ) : (
+            <InlineNotification
+              kind="info"
+              title="No scores for this chart yet"
+              subtitle="Be the first to set a record."
+              hideCloseButton
+              lowContrast
+            />
+          )}
+        </>
+      )}
     </Stack>
   );
 }

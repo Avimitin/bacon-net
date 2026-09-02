@@ -26,7 +26,7 @@ import { Logout } from "@carbon/icons-react";
 import "@carbon/styles/css/styles.css";
 
 import { api } from "./api.js";
-import { SessionProvider, RequireAuth, useSession } from "./session.jsx";
+import { SessionProvider, RequireAuth, RequireAdmin, useSession } from "./session.jsx";
 import Login from "./views/Login.jsx";
 import Register from "./views/Register.jsx";
 import Dashboard from "./views/Dashboard.jsx";
@@ -84,9 +84,11 @@ function Shell() {
               </NavItem>
             </>
           )}
-          <NavItem to="/admin" currentPath={pathname}>
-            Admin
-          </NavItem>
+          {session?.admin && (
+            <NavItem to="/admin" currentPath={pathname}>
+              Admin
+            </NavItem>
+          )}
         </HeaderNavigation>
         <HeaderGlobalBar>
           {session && (
@@ -148,11 +150,13 @@ function Shell() {
           <Route
             path="/admin"
             element={
-              <React.Suspense
-                fallback={<Loading description="Loading admin console…" withOverlay={false} />}
-              >
-                <Admin />
-              </React.Suspense>
+              <RequireAdmin>
+                <React.Suspense
+                  fallback={<Loading description="Loading admin console…" withOverlay={false} />}
+                >
+                  <Admin />
+                </React.Suspense>
+              </RequireAdmin>
             }
           />
           <Route path="*" element={<Navigate to="/" replace />} />

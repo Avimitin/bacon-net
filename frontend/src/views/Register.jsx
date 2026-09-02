@@ -16,7 +16,7 @@ import { useSession } from "../session.jsx";
 import { humanError } from "../util.js";
 
 export default function Register() {
-  const { session, setSession } = useSession();
+  const { session, setSession, loading } = useSession();
   const navigate = useNavigate();
   const [username, setUsername] = useState("");
   const [password, setPassword] = useState("");
@@ -25,6 +25,7 @@ export default function Register() {
   const [bindWarning, setBindWarning] = useState(null);
   const [busy, setBusy] = useState(false);
 
+  if (loading) return null; // session cookie check in flight
   if (session) return <Navigate to="/" replace />;
 
   const submit = async (ev) => {
@@ -32,10 +33,9 @@ export default function Register() {
     setError(null);
     setBindWarning(null);
     setBusy(true);
-    let data;
     try {
-      data = await api.register(username.trim(), password);
-      setSession({ token: data.token, username: data.username, expires_at: data.expires_at });
+      await api.register(username.trim(), password);
+      setSession(await api.me()); // cookie is set; fetch the user doc
     } catch (err) {
       setError(humanError(err));
       setBusy(false);
