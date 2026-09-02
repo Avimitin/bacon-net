@@ -55,13 +55,22 @@ In releases, override via environment (`config/runtime.exs`):
 | `BACON_RESPONSE_COMPRESSION` | `0` (`1` enables)    |
 | `BACON_MAINTENANCE_MODE`     | `0` (`1` enables)    |
 | `BACON_WEBUI_DIR`            | bundled webui        |
+| `BACON_ADMIN_TOKEN`          | unset (API open)     |
 
 The database is a TinyDB-compatible `db.json` in the working directory.
 
 ## Management API
 
-REST API backing the webui (also usable standalone; JSON in/out, no auth —
-bind to localhost or firewall accordingly):
+Two JSON APIs back the webui:
+
+**Player accounts (`/account/api`)** — used by the webui login screen.
+Players register with username/password (PBKDF2-hashed, bearer-session
+login), bind one or more e-amusement cards (UID or Konami ID; a card can
+only be bound to one account), and then see only their own data: profiles
+and settings per game (merge-patch editing; a profile's `card` can never be
+reassigned through the API), their score history, and server-wide rankings.
+
+**Operator API (`/manage/api`)** — generic CRUD over every DB table:
 
 - `GET /manage/api/tables` — every DB table with document counts
 - `GET /manage/api/cards` — all documents with a `card` field, grouped by card
@@ -70,6 +79,14 @@ bind to localhost or firewall accordingly):
 - `DELETE /manage/api/table/{table}` — drop a whole table
 
 Documents are returned with their TinyDB id inlined as `_id`.
+
+### Production (arcade) deployment
+
+The server has no TLS — run it on a trusted LAN or behind a reverse proxy.
+Set `BACON_ADMIN_TOKEN` to protect `/manage/api` with
+`Authorization: Bearer <token>` (players never need it; it is for the
+operator's Admin view in the webui). When unset, `/manage/api` is open —
+fine for development, not for a shop floor.
 
 ## Playable Games
 
