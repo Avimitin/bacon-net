@@ -73,7 +73,7 @@
             pname = "bacon-net-deps";
             version = "0.1.0";
             src = ./.;
-            hash = "sha256-pb3Oz5ViTc9za6Fg45yEaH3N9eM3NzP5DdVLj/W/k7w=";
+            hash = "sha256-RhwitE7DFL7j/vvV8fhw32t1Z/4WTZ/5sRGxNV9hvOQ=";
           };
         };
       });

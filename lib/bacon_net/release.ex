@@ -12,8 +12,8 @@ defmodule BaconNet.Release do
   def migrate do
     Application.load(@app)
 
-    {:ok, _} = Application.ensure_all_started(:postgrex)
     {:ok, _} = Application.ensure_all_started(:ssl)
+    {:ok, _} = Application.ensure_all_started(:ecto_sql)
 
     {:ok, pid} = BaconNet.Repo.start_link(timeout: 15_000)
 
