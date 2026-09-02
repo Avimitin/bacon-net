@@ -29,7 +29,7 @@ defmodule BaconNet.Config do
   def paseli, do: Application.get_env(:bacon_net, :paseli, 10_000)
   def maintenance_mode, do: Application.get_env(:bacon_net, :maintenance_mode, false)
 
-  @doc "Settings map exposed at /config and written to webui/monkey.json."
+  @doc "Settings map exposed at /config."
   def settings do
     %{
       "ip" => ip(),

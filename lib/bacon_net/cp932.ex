@@ -1,14 +1,14 @@
 defmodule BaconNet.CP932 do
   @moduledoc """
-  Minimal cp932 (Windows Shift-JIS) codec backed by a pregenerated mapping
-  table (priv/cp932.bin, produced by scripts/gen_cp932.py).
+  Minimal cp932 (Windows Shift-JIS) codec backed by a mapping table generated
+  into the build output by scripts/gen_cp932.py.
 
   Tables are loaded into `:persistent_term` on first use.
   """
 
   import Bitwise
 
-  @external_resource Path.expand("../../priv/cp932.bin", __DIR__)
+  @external_resource Path.expand("../../scripts/gen_cp932.py", __DIR__)
 
   @doc "Decode a cp932 binary to a UTF-8 string. Raises on invalid input."
   def decode!(bin) when is_binary(bin) do

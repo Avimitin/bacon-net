@@ -11,7 +11,7 @@ defmodule BaconNet.Core do
 
   import Plug.Conn
 
-  alias BaconNet.{Arc4, Config, Kbinxml, LZ77, XNode}
+  alias BaconNet.{Arc4, Config, E, Kbinxml, LZ77, Shop, XNode}
 
   @loopback "127.0.0.1"
 
@@ -34,8 +34,23 @@ defmodule BaconNet.Core do
           is_binxml: boolean
         }
 
-  @doc "Decode the request. Returns {info, conn} (info is %{} for empty bodies)."
+  @doc """
+  Decode the request. Returns {info, conn} (info is %{} for empty bodies).
+  The decoded info is cached on the conn so guarding and the eventual
+  handler only pay for the decode once.
+  """
   def process_request(%Plug.Conn{} = conn) do
+    case conn.private[:bacon_info] do
+      nil ->
+        {info, conn} = do_process_request(conn)
+        {info, put_private(conn, :bacon_info, info)}
+
+      info ->
+        {info, conn}
+    end
+  end
+
+  defp do_process_request(%Plug.Conn{} = conn) do
     {body, conn} = read_body_cached(conn)
     cl = get_req_header(conn, "content-length") |> List.first()
 
@@ -98,6 +113,38 @@ defmodule BaconNet.Core do
   @doc "The first child of the request root (the module node), or nil."
   def module_node(%{root: %XNode{children: [node | _]}}), do: node
   def module_node(_), do: nil
+
+  @doc """
+  Guard a game protocol request by shop permission. Decodes the request
+  (cached for the handler) and checks the `srcid` PCBID against the shop
+  registry. Returns {:ok, conn} when the shop is permitted; otherwise
+  remembers the PCBID as pending, sends an error response, and returns
+  {:rejected, conn}.
+  """
+  def guard_shop(%Plug.Conn{} = conn) do
+    {info, conn} = process_request(conn)
+    pcbid = info[:root] && XNode.attr(info.root, "srcid")
+
+    if Shop.permitted?(pcbid) do
+      {:ok, conn}
+    else
+      Shop.register_pending(pcbid)
+
+      if pcbid do
+        Logger.warning("rejecting game request from unpermitted PCBID #{pcbid}")
+      else
+        Logger.warning("rejecting game request without a PCBID")
+      end
+
+      {:rejected, reject_request(conn, info)}
+    end
+  end
+
+  @doc "Send a protocol-level error response (status=1) for a rejected request."
+  def reject_request(%Plug.Conn{} = conn, %{} = info) do
+    module = Map.get(info, :module) || "services"
+    send_response(conn, info, E.e("response", E.e(module, status: 1)))
+  end
 
   @doc "Encode and send an XNode response through the request's transforms."
   def send_response(%Plug.Conn{} = conn, %{} = info, %XNode{} = xml) do

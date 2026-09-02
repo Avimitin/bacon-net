@@ -177,6 +177,9 @@ defmodule BaconNet.Registry do
     if p == s, do: match_segments(ps, ss, params), else: nil
   end
 
+  @doc "Whether a game protocol route exists for prefix/mod/method."
+  def game_route?(prefix, mod, method), do: find_route(prefix, mod, method) != nil
+
   @doc "Dispatch a POST /:prefix/:gameinfo/:mod/:method request."
   def dispatch(conn, prefix, mod, method) do
     case find_route(prefix, mod, method) do

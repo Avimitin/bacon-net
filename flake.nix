@@ -23,6 +23,7 @@
             erlang
             git
             nodejs_22
+            python3
           ];
 
           shellHook = ''
@@ -40,7 +41,10 @@
           version = "0.1.0";
           src = ./frontend;
 
-          npmDepsHash = "sha256-uRq6SvQuCwxt9LdZ8wmphEWIG5Ty5YM+AisxQvLgok0=";
+          npmDepsHash = "sha256-YIVVFVqpl2xURL5X9U5WnrrKw2N+jb9LAwZuNgpyrdg=";
+
+          # carbon's telemetry is opt-out; never phone home from builds
+          IBM_TELEMETRY_DISABLED = "true";
 
           installPhase = ''
             runHook preInstall
@@ -53,6 +57,7 @@
           pname = "bacon-net";
           version = "0.1.0";
           src = ./.;
+          nativeBuildInputs = [ pkgs.python3 ];
 
           # keep releases/COOKIE so the server starts without extra env vars
           removeCookie = false;

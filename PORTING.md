@@ -51,6 +51,10 @@ end
 * Routes containing `{ver}` (sdvx `sv{ver}_*`, gitadora `{ver}_shopinfo`)
   produce handlers of arity 2: `(conn, ver)`.
 * Register the module in `BaconNet.Registry` `@modules`.
+* Handlers never see requests from unpermitted cabinets: the router runs
+  `Core.guard_shop/1` (see `lib/bacon_net/shop.ex`) before dispatch and
+  rejects unknown/revoked PCBIDs with a `status="1"` response. This is a
+  deliberate deviation from the Python original.
 
 ## Request access patterns
 

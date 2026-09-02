@@ -102,6 +102,80 @@ defmodule BaconNet.ManageTest do
     DB.drop_table("test_manage_plain")
   end
 
+  test "shop permit management" do
+    # add a permitted shop
+    conn = call(:post, "/manage/api/shops", %{"pcbid" => "SHOPTESTPCBID01", "opname" => "TEST SHOP"})
+    assert conn.status == 201
+    assert %{"pcbid" => "SHOPTESTPCBID01", "permitted" => true} = json(conn)
+
+    # duplicate add conflicts
+    assert call(:post, "/manage/api/shops", %{"pcbid" => "SHOPTESTPCBID01"}).status == 409
+    # invalid pcbid rejected
+    assert call(:post, "/manage/api/shops", %{"pcbid" => "bad pcbid!"}).status == 400
+    assert call(:post, "/manage/api/shops", %{}).status == 400
+
+    # listed
+    conn = call(:get, "/manage/api/shops")
+    assert %{"shops" => shops} = json(conn)
+    assert Enum.any?(shops, &(&1["pcbid"] == "SHOPTESTPCBID01" and &1["permitted"] == true))
+
+    # revoke / permit
+    conn = call(:post, "/manage/api/shops/SHOPTESTPCBID01/revoke")
+    assert json(conn)["permitted"] == false
+
+    conn = call(:post, "/manage/api/shops/SHOPTESTPCBID01/permit")
+    assert json(conn)["permitted"] == true
+
+    # unknown pcbid 404s
+    assert call(:post, "/manage/api/shops/MISSING/revoke").status == 404
+    assert call(:post, "/manage/api/shops/MISSING/permit").status == 404
+    assert call(:delete, "/manage/api/shops/MISSING").status == 404
+
+    # delete removes the permission entirely
+    assert call(:delete, "/manage/api/shops/SHOPTESTPCBID01").status == 204
+    conn = call(:get, "/manage/api/shops")
+    refute json(conn)["shops"] |> Enum.any?(&(&1["pcbid"] == "SHOPTESTPCBID01"))
+  after
+    DB.drop_table("shop")
+  end
+
+  test "user ban management" do
+    DB.insert("webui_users", %{
+      "username" => "villain",
+      "pass_hash" => "AA",
+      "salt" => "BB",
+      "iterations" => 1,
+      "cards" => ["E004000000000042"],
+      "banned" => false,
+      "created_at" => 1
+    })
+
+    DB.insert("webui_sessions", %{"token" => "tok1", "username" => "villain", "expires_at" => 9_999_999_999})
+
+    # list hides credentials
+    conn = call(:get, "/manage/api/users")
+    assert %{"users" => [user]} = json(conn)
+    assert user["username"] == "villain"
+    assert user["banned"] == false
+    refute Map.has_key?(user, "pass_hash")
+    refute Map.has_key?(user, "salt")
+
+    # ban kills live sessions
+    conn = call(:post, "/manage/api/users/villain/ban")
+    assert conn.status == 200
+    assert json(conn)["banned"] == true
+    assert DB.get("webui_sessions", %{"username" => "villain"}) == nil
+
+    conn = call(:post, "/manage/api/users/villain/unban")
+    assert json(conn)["banned"] == false
+
+    assert call(:post, "/manage/api/users/ghost/ban").status == 404
+    assert call(:post, "/manage/api/users/ghost/unban").status == 404
+  after
+    DB.drop_table("webui_users")
+    DB.drop_table("webui_sessions")
+  end
+
   test "webui serves static files" do
     dir = Path.join(System.tmp_dir!(), "bacon_webui_test_#{System.unique_integer([:positive])}")
     File.mkdir_p!(dir)

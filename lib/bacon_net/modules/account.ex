@@ -126,6 +126,7 @@ defmodule BaconNet.Modules.Account do
         "salt" => Base.encode16(salt),
         "iterations" => @pbkdf2_iterations,
         "cards" => [],
+        "banned" => false,
         "created_at" => System.system_time(:second)
       }
 
@@ -148,9 +149,13 @@ defmodule BaconNet.Modules.Account do
          password when is_binary(password) <- body["password"],
          user when not is_nil(user) <- DB.get(@users_table, %{"username" => String.downcase(username)}),
          true <- verify_password(user, password) do
-      purge_expired_sessions()
-      {token, expires_at} = create_session(user["username"])
-      Api.json(conn, session_response(token, expires_at, user["username"]))
+      if user["banned"] == true do
+        Api.error(conn, 403, "account_banned")
+      else
+        purge_expired_sessions()
+        {token, expires_at} = create_session(user["username"])
+        Api.json(conn, session_response(token, expires_at, user["username"]))
+      end
     else
       _ -> Api.error(conn, 401, "invalid_credentials")
     end
@@ -392,7 +397,8 @@ defmodule BaconNet.Modules.Account do
     with ["Bearer " <> token] <- get_req_header(conn, "authorization"),
          session when not is_nil(session) <- DB.get(@sessions_table, %{"token" => token}),
          true <- (session["expires_at"] || 0) > System.system_time(:second),
-         user when not is_nil(user) <- DB.get(@users_table, %{"username" => session["username"]}) do
+         user when not is_nil(user) <- DB.get(@users_table, %{"username" => session["username"]}),
+         false <- user["banned"] == true do
       {:ok, user, token}
     else
       _ -> :unauthorized

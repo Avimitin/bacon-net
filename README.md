@@ -3,12 +3,15 @@
 Experimental e-amusement server intended for testing hacks, also usable by
 players — an Elixir rewrite of [MonkeyBusiness](https://github.com/drmext/MonkeyBusiness).
 
+![bacon-net webui dashboard populated with mock player data](docs/webui-dashboard.png)
+
 Monorepo layout:
 
 - `/` — Elixir server (Bandit/Plug, no Phoenix); game protocol, JSON APIs,
   TinyDB-compatible store
-- `frontend/` — pure static webui (Vite + vanilla JS) for browsing and
-  editing user data, served by the server under `/webui`
+- `frontend/` — pure static webui (Vite + React +
+  [Carbon](https://react.carbondesignsystem.com/)) for browsing and editing
+  user data, served by the server under `/webui`
 
 All binary dependencies (Elixir, Erlang/OTP, Node.js/npm, mix/hex tooling)
 are managed by [Nix](https://nixos.org/) via the included flake; only a
@@ -36,6 +39,11 @@ Release build (fully Nix-managed, offline after first fetch; the webui in
 nix build
 ./result/bin/bacon_net start
 ```
+
+The release root in `/nix/store` is read-only, so runtime state (run_erl
+pipes/logs) goes to `/tmp/bacon_net` by default; override with
+`RELEASE_TMP=/some/dir` if needed. The database is a `db.json` in the
+directory you start the release from.
 
 The built-in web interface for managing user data lives at
 `http://localhost:8000/webui/` (see `frontend/README.md` for development).
@@ -77,8 +85,30 @@ reassigned through the API), their score history, and server-wide rankings.
 - `GET /manage/api/table/{table}` / `POST` (insert)
 - `GET /manage/api/table/{table}/{id}` / `PUT` (replace) / `PATCH` (merge) / `DELETE`
 - `DELETE /manage/api/table/{table}` — drop a whole table
+- `GET /manage/api/shops` / `POST` — list / add permitted shops (cabinet PCBIDs)
+- `POST /manage/api/shops/{pcbid}/permit` / `.../revoke` — grant / revoke a shop's permission
+- `DELETE /manage/api/shops/{pcbid}` — remove a shop entirely
+- `GET /manage/api/users` — player accounts (credentials are never exposed)
+- `POST /manage/api/users/{username}/ban` / `.../unban` — ban (kills live sessions) / unban
 
 Documents are returned with their TinyDB id inlined as `_id`.
+
+## Shops (PCBID permissions)
+
+The server supports multiple shops, identified by the cabinet's PCBID (the
+`srcid` attribute on every e-amusement request). A cabinet can only connect
+when its PCBID is permitted:
+
+- Game connections without a PCBID, or with an unknown/revoked PCBID, are
+  rejected with a protocol-level error (`status="1"`).
+- Unknown PCBIDs are remembered as *pending* shops (`shop` table,
+  `"permitted": false`) so the operator can approve them from the Admin →
+  Shops page (or `POST /manage/api/shops/{pcbid}/permit`).
+- Shop documents predating this feature have no `permitted` field and count
+  as permitted (grandfathered).
+- Shops and player accounts are separate scopes: a shop permission only
+  allows cabinets to connect, and players keep full access to their own
+  cards regardless of which shop they played at.
 
 ### Production (arcade) deployment
 
@@ -87,6 +117,11 @@ Set `BACON_ADMIN_TOKEN` to protect `/manage/api` with
 `Authorization: Bearer <token>` (players never need it; it is for the
 operator's Admin view in the webui). When unset, `/manage/api` is open —
 fine for development, not for a shop floor.
+
+Permit each cabinet's PCBID from the Admin → Shops page before it can
+connect (see "Shops (PCBID permissions)"). Use Admin → Users to ban a
+player account; banned players cannot log in and their sessions are killed
+immediately.
 
 ## Playable Games
 

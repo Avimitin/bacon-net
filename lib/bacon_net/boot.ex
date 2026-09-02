@@ -1,6 +1,6 @@
 defmodule BaconNet.Boot do
   @moduledoc """
-  Startup banner and webui setup (pyeamu.py __main__ counterpart).
+  Startup banner (pyeamu.py __main__ counterpart).
   """
 
   alias BaconNet.Config
@@ -14,8 +14,6 @@ defmodule BaconNet.Boot do
   """
 
   def announce do
-    setup_webui()
-
     if Application.get_env(:bacon_net, :announce_boot, true) do
       IO.puts("")
       IO.puts(@banner)
@@ -40,8 +38,8 @@ defmodule BaconNet.Boot do
           IO.puts("http://#{address}/webui/")
         end
       else
-        IO.puts("/webui missing")
-        IO.puts("download it here: https://github.com/drmext/BounceTrippy/releases")
+        IO.puts("webui not found in #{Config.webui_dir()}")
+        IO.puts("build it with `nix build` (bundled) or see frontend/README.md")
       end
 
       IO.puts("")
@@ -62,13 +60,7 @@ defmodule BaconNet.Boot do
     for address <- server_addresses(), do: "http://#{address}/core"
   end
 
-  def webui?, do: File.dir?("webui")
-
-  defp setup_webui do
-    if webui?() do
-      File.write(Path.join("webui", "monkey.json"), Jason.encode!(Config.settings(), pretty: true))
-    end
-  end
+  def webui?, do: File.exists?(Path.join(Config.webui_dir(), "index.html"))
 
   defp hostname do
     case :inet.gethostname() do

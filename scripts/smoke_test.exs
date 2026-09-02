@@ -62,6 +62,22 @@ end
 
 card = "E004009999999999"
 
+# --- shop permission: the server rejects game connections from unknown
+# PCBIDs, so permit the smoke-test PCBID first (no-op if it already exists;
+# requires BACON_ADMIN_TOKEN to be unset on the target server).
+IO.puts("shop permit")
+permit_body = ~s|{"pcbid":"A00000000000","opname":"SMOKE TEST"}|
+
+{:ok, {{_, st, _}, _, _}} =
+  :httpc.request(
+    :post,
+    {~c"http://127.0.0.1:8000/manage/api/shops", [], ~c"application/json", permit_body},
+    [],
+    []
+  )
+
+Smoke.check("permit smoke pcbid", st in [201, 409])
+
 # --- services.get
 IO.puts("services.get")
 {st, doc} = Smoke.post_kbin("/core/LDJ:J:A:A:2025091700/services/get", "LDJ:J:A:A:2025091700", E.e("services", method: "get"))

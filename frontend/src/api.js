@@ -126,6 +126,23 @@ export const api = {
   deleteDoc: (table, id) =>
     adminCall(`/manage/api/table/${enc(table)}/${enc(id)}`, { method: "DELETE" }),
   dropTable: (table) => adminCall(`/manage/api/table/${enc(table)}`, { method: "DELETE" }),
+
+  // ---- admin: shops (permitted cabinet PCBIDs) ----
+  shops: () => adminCall("/manage/api/shops"),
+  createShop: (pcbid, opname) =>
+    adminCall("/manage/api/shops", {
+      method: "POST",
+      body: opname ? { pcbid, opname } : { pcbid },
+    }),
+  permitShop: (pcbid) => adminCall(`/manage/api/shops/${enc(pcbid)}/permit`, { method: "POST" }),
+  revokeShop: (pcbid) => adminCall(`/manage/api/shops/${enc(pcbid)}/revoke`, { method: "POST" }),
+  deleteShop: (pcbid) => adminCall(`/manage/api/shops/${enc(pcbid)}`, { method: "DELETE" }),
+
+  // ---- admin: users ----
+  users: () => adminCall("/manage/api/users"),
+  banUser: (username) => adminCall(`/manage/api/users/${enc(username)}/ban`, { method: "POST" }),
+  unbanUser: (username) =>
+    adminCall(`/manage/api/users/${enc(username)}/unban`, { method: "POST" }),
 };
 
 // ---- game metadata (public, cached) ----

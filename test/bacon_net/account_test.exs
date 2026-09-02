@@ -196,6 +196,27 @@ defmodule BaconNet.AccountTest do
     assert call(:get, "/account/api/rankings").status == 401
   end
 
+  test "banned users cannot log in and existing sessions die" do
+    %{"token" => token} = json(register("banned1", "password123"))
+
+    # session works before the ban
+    assert call(:get, "/account/api/me", nil, token).status == 200
+
+    DB.update("webui_users", %{"banned" => true}, %{"username" => "banned1"})
+
+    # login is rejected with 403 account_banned
+    conn = call(:post, "/account/api/login", %{"username" => "banned1", "password" => "password123"})
+    assert conn.status == 403
+    assert %{"error" => "account_banned"} = json(conn)
+
+    # existing session is rejected too
+    assert call(:get, "/account/api/me", nil, token).status == 401
+
+    # unban restores login
+    DB.update("webui_users", %{"banned" => false}, %{"username" => "banned1"})
+    assert call(:post, "/account/api/login", %{"username" => "banned1", "password" => "password123"}).status == 200
+  end
+
   test "games metadata is public" do
     conn = call(:get, "/account/api/games")
     assert conn.status == 200

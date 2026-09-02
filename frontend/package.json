@@ -5,10 +5,18 @@
   "type": "module",
   "scripts": {
     "dev": "vite",
-    "build": "vite build",
+    "build": "IBM_TELEMETRY_DISABLED=true vite build",
     "preview": "vite preview"
   },
   "devDependencies": {
     "vite": "^7.1.5"
+  },
+  "dependencies": {
+    "@carbon/icons-react": "^11.87.0",
+    "@carbon/react": "^1.115.0",
+    "@carbon/styles": "^1.114.0",
+    "react": "^19.2.8",
+    "react-dom": "^19.2.8",
+    "react-router": "^8.3.1"
   }
 }

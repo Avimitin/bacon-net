@@ -50,11 +50,17 @@ defmodule BaconNet.Router do
 
     name = String.downcase("#{module}_#{method}")
 
-    case Registry.dispatch_by_name(conn, name) do
-      :not_found ->
-        forward_game_specific(conn, model, module, method)
+    case Core.guard_shop(conn) do
+      {:ok, conn} ->
+        case Registry.dispatch_by_name(conn, name) do
+          :not_found ->
+            forward_game_specific(conn, model, module, method)
 
-      conn ->
+          conn ->
+            conn
+        end
+
+      {:rejected, conn} ->
         conn
     end
   end
@@ -99,15 +105,16 @@ defmodule BaconNet.Router do
   post "/:prefix/:gameinfo/:mod/:method" do
     conn = fetch_query_params(conn)
 
-    case Registry.dispatch(conn, "/#{prefix}", mod, method) do
-      nil ->
-        case Registry.dispatch_api(conn, :post, "/#{prefix}", [gameinfo, mod, method]) do
-          nil -> send_resp(conn, 404, "")
-          conn -> conn
-        end
-
-      conn ->
-        conn
+    if Registry.game_route?("/#{prefix}", mod, method) do
+      case Core.guard_shop(conn) do
+        {:ok, conn} -> Registry.dispatch(conn, "/#{prefix}", mod, method)
+        {:rejected, conn} -> conn
+      end
+    else
+      case Registry.dispatch_api(conn, :post, "/#{prefix}", [gameinfo, mod, method]) do
+        nil -> send_resp(conn, 404, "")
+        conn -> conn
+      end
     end
   end
 
@@ -156,6 +163,14 @@ defmodule BaconNet.Router do
 
   defp services_get(conn) do
     conn = fetch_query_params(conn)
+
+    case Core.guard_shop(conn) do
+      {:ok, conn} -> do_services_get(conn)
+      {:rejected, conn} -> conn
+    end
+  end
+
+  defp do_services_get(conn) do
     {info, conn} = Core.process_request(conn)
     params = conn.query_params
 
