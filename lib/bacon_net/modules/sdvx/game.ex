@@ -1,5 +1,5 @@
 defmodule BaconNet.Modules.Sdvx.Game do
-  @moduledoc "Port of modules/sdvx/game.py."
+  @moduledoc false
 
   alias BaconNet.{CP932, Core, DB, E, Kbinxml, Scores, XNode}
 

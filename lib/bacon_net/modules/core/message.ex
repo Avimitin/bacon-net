@@ -1,5 +1,5 @@
 defmodule BaconNet.Modules.Core.Message do
-  @moduledoc "Port of modules/core/message.py."
+  @moduledoc false
 
   alias BaconNet.{Config, Core, E}
 

@@ -1,6 +1,6 @@
 defmodule Mix.Tasks.BaconNet.ImportJson do
   @moduledoc """
-  Import a TinyDB-format db.json (MonkeyBusiness layout) into PostgreSQL.
+  Import a legacy TinyDB-format db.json into PostgreSQL.
 
       mix bacon_net.import_json [db.json]
 

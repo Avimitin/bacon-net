@@ -1,5 +1,5 @@
 defmodule BaconNet.Modules.Gitadora.Playablemusic do
-  @moduledoc "Port of modules/gitadora/playablemusic.py."
+  @moduledoc false
 
   alias BaconNet.{Core, E, Kbinxml, XNode}
 

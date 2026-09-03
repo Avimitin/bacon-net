@@ -1,5 +1,5 @@
 defmodule BaconNet.Modules.Iidx.Iidx31gamesystem do
-  @moduledoc "Port of modules/iidx/iidx31gamesystem.py."
+  @moduledoc false
 
   alias BaconNet.{Core, E}
 

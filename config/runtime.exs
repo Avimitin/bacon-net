@@ -10,7 +10,7 @@ if config_env() == :prod do
   config :bacon_net, BaconNet.Repo,
     pool_size: String.to_integer(System.get_env("BACON_DB_POOL_SIZE", "10"))
 
-  # Optional environment overrides (all default to config.py values).
+  # Optional environment overrides for the application defaults.
   if port = System.get_env("BACON_PORT") do
     config :bacon_net, port: String.to_integer(port)
   end

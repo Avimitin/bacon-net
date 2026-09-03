@@ -1,6 +1,6 @@
 defmodule BaconNet.Kbinxml.Formats do
   @moduledoc """
-  Node type table for Konami binary XML, ported from kbinxml's format_ids.py.
+  Node type table for Konami binary XML.
 
   Each entry: %{type: struct_type_char, size: byte_size, count: elems_per_value,
   name: canonical_name, conv: :int | :float | :ip4 | nil}

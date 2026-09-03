@@ -1,7 +1,6 @@
 defmodule Mix.Tasks.Db.Trim do
   @moduledoc """
-  Trim unused non-best score tables from the database
-  (utils/db/trim_monkey_db.py counterpart).
+  Trim unused non-best score tables from the database.
 
       mix db.trim
   """

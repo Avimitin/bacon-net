@@ -1,5 +1,5 @@
 defmodule BaconNet.Modules.Core.Pcbevent do
-  @moduledoc "Port of modules/core/pcbevent.py."
+  @moduledoc false
 
   alias BaconNet.{Core, E}
 

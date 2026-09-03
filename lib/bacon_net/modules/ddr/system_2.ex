@@ -1,5 +1,5 @@
 defmodule BaconNet.Modules.Ddr.System2 do
-  @moduledoc "Port of modules/ddr/system_2.py."
+  @moduledoc false
 
   alias BaconNet.{Card, Core, E, XNode}
 

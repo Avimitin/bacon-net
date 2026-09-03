@@ -1,6 +1,6 @@
 defmodule BaconNet.LZ77 do
   @moduledoc """
-  The e-amusement LZ77 variant, ported from utils/lz77.py.
+  The e-amusement LZ77 codec.
   """
 
   import Bitwise

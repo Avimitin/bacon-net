@@ -1,9 +1,9 @@
 # bacon-net
 
-Experimental e-amusement server intended for testing hacks, also usable by
-players — an Elixir rewrite of [MonkeyBusiness](https://github.com/drmext/MonkeyBusiness).
+An experimental multi-tenant e-amusement game service built with Elixir,
+PostgreSQL, React, and Carbon.
 
-![bacon-net webui dashboard populated with mock player data](docs/webui-dashboard.png)
+bacon-net began as an Elixir rewrite of [MonkeyBusiness](https://github.com/drmext/MonkeyBusiness); it is now an independent project.
 
 Monorepo layout:
 
@@ -12,6 +12,41 @@ Monorepo layout:
 - `frontend/` — pure static webui (Vite + React +
   [Carbon](https://react.carbondesignsystem.com/)) for browsing and editing
   user data, served by the server under `/webui`
+
+## Web interface
+
+The Carbon-based interface covers player self-service and operator workflows.
+All identities, cards, scores, and shops shown below are synthetic. Select an
+image to view it at full size.
+
+<table>
+  <tr>
+    <td width="50%">
+      <a href="docs/webui-dashboard.png"><img src="docs/webui-dashboard.png" alt="Player dashboard showing synthetic cards and four game profiles"></a><br>
+      <sub><strong>Player dashboard</strong> — bound cards and profiles across supported games.</sub>
+    </td>
+    <td width="50%">
+      <a href="docs/webui-scores.png"><img src="docs/webui-scores.png" alt="Filtered beatmania IIDX score history populated with synthetic records"></a><br>
+      <sub><strong>Score history</strong> — game filtering, record details, and bounded pagination.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <a href="docs/webui-rankings.png"><img src="docs/webui-rankings.png" alt="Synthetic beatmania IIDX leaderboard with the signed-in player highlighted"></a><br>
+      <sub><strong>Rankings</strong> — a chart leaderboard with the signed-in player highlighted.</sub>
+    </td>
+    <td width="50%">
+      <a href="docs/webui-admin-shops.png"><img src="docs/webui-admin-shops.png" alt="Operator shop console showing synthetic permitted and pending cabinets"></a><br>
+      <sub><strong>Operator console</strong> — permitted and pending cabinet workflows.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td colspan="2">
+      <a href="docs/webui-settings.png"><img src="docs/webui-settings.png" alt="beatmania IIDX profile settings with curated per-version controls"></a><br>
+      <sub><strong>Game settings</strong> — quick profile edits and curated per-version IIDX controls.</sub>
+    </td>
+  </tr>
+</table>
 
 All binary dependencies (Elixir, Erlang/OTP, Node.js/npm, PostgreSQL,
 mix/hex tooling) are managed by [Nix](https://nixos.org/) via the included
@@ -59,7 +94,7 @@ the database commits; there is no in-memory authoritative copy.
   ./result/bin/bacon_net eval "BaconNet.Release.migrate()"
   ```
 
-- **Importing a MonkeyBusiness/TinyDB `db.json`**:
+- **Importing a legacy TinyDB `db.json`**:
 
   ```sh
   nix develop
@@ -75,8 +110,8 @@ The built-in web interface for managing user data lives at
 
 ## Configuration
 
-Defaults match `config.py` from the Python project (see `config/config.exs`).
-In releases, override via environment (`config/runtime.exs`):
+Defaults live in `config/config.exs`. In releases, override them through the
+environment (`config/runtime.exs`):
 
 | Variable                     | Default              |
 | ---------------------------- | -------------------- |
@@ -85,7 +120,7 @@ In releases, override via environment (`config/runtime.exs`):
 | `BACON_PUBLIC_URL`           | `http://<ip>:<port>` |
 | `BACON_PORT`                 | `8000`               |
 | `BACON_IP`                   | auto-detected        |
-| `BACON_ARCADE`               | `Ｍ０ＮＫＹＢＵＳ１Ｎ３Ｚ` |
+| `BACON_ARCADE`               | `ＢＡＣＯＮ－ＮＥＴ`     |
 | `BACON_PASELI`               | `10000`              |
 | `BACON_VERBOSE_LOG`          | `1` (`0` disables)   |
 | `BACON_RESPONSE_COMPRESSION` | `0` (`1` enables)    |
@@ -216,15 +251,35 @@ npm run dev                           # vite dev server, proxies /manage + /conf
 npm run build                         # static build into frontend/dist
 ```
 
+### Refreshing the README screenshots
+
+The tracked helpers recreate the gallery from isolated, synthetic data. In
+one `nix develop` terminal, build and serve the fixture environment:
+
+```sh
+npm --prefix frontend run build
+mix run --no-start scripts/readme_screenshot_server.exs
+```
+
+Then, with Chromium available on `PATH`, run from a second terminal:
+
+```sh
+node scripts/capture_readme_screenshots.mjs
+```
+
+Set `CHROMIUM_BIN` when the executable has another name. The fixture server
+listens only on `127.0.0.1`, resets only its dedicated PostgreSQL database in
+`/tmp/bacon-net-pg-readme-screenshots`, and never writes runtime data into the
+repository. The capture script replaces the five tracked images under
+`docs/` and also writes an untracked narrow-layout check to `/tmp`.
+
 To serve a fresh frontend build from the dev server, copy it into place:
 `cp -r frontend/dist/* priv/static/` (releases do this automatically).
-
-`PORTING.md` documents the Python→Elixir architecture mapping for contributors.
 
 ## Troubleshooting
 
 - DRS, GD, NOST, and SDVX require mdb xml files copied to the server folder
 - **URL Slash 1 (On)** may be required in rare cases; **URL Slash 0 (Off)**
-  in others (the server supports both, like the original)
+  in others; the server supports both modes
 - When initially creating a DDR profile, complete an entire credit without
   pfree hacks

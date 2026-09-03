@@ -1,22 +1,16 @@
 defmodule BaconNet.Boot do
   @moduledoc """
-  Startup banner (pyeamu.py __main__ counterpart).
+  Startup banner and local endpoint summary.
   """
 
   alias BaconNet.Config
 
-  @banner """
-   █▄ ▄█ █▀█ █▄ █ █▄▀ ▀██ ▀▄▀
-   █ ▀ █ █▄█ █ ▀█ █ █ ▄▄█  █
-
-   ██▄ █ █ ▄▀▀ ▄█ █▄ █ ▀██ ▀█▀
-   █▄█ ▀▄█ ▄██  █ █ ▀█ ▄▄█ █▄▄
-  """
+  @source_repository "https://github.com/Avimitin/bacon-net"
 
   def announce do
     if Application.get_env(:bacon_net, :announce_boot, true) do
       IO.puts("")
-      IO.puts(@banner)
+      IO.puts(IO.ANSI.bright() <> "bacon-net" <> IO.ANSI.reset())
       IO.puts("")
       IO.puts(IO.ANSI.bright() <> "Game Config" <> IO.ANSI.reset() <> ":")
 
@@ -44,7 +38,7 @@ defmodule BaconNet.Boot do
 
       IO.puts("")
       IO.puts(IO.ANSI.bright() <> "Source Repository" <> IO.ANSI.reset() <> ":")
-      IO.puts("https://github.com/drmext/MonkeyBusiness")
+      IO.puts(@source_repository)
       IO.puts("")
     end
   end

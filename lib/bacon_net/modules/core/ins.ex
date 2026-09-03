@@ -1,5 +1,5 @@
 defmodule BaconNet.Modules.Core.Ins do
-  @moduledoc "Port of modules/core/ins.py."
+  @moduledoc false
 
   alias BaconNet.{Core, E}
 

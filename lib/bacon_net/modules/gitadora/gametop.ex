@@ -1,5 +1,5 @@
 defmodule BaconNet.Modules.Gitadora.Gametop do
-  @moduledoc "Port of modules/gitadora/gametop.py."
+  @moduledoc false
 
   import Bitwise
 

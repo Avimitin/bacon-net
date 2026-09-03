@@ -1,6 +1,6 @@
 defmodule BaconNet.Modules.Core.Eacoin do
   @moduledoc """
-  Port of modules/core/eacoin.py, backed by the `BaconNet.Wallet` ledger.
+  e-amusement coin operations backed by the `BaconNet.Wallet` ledger.
 
   Protocol response shapes and emulator semantics (configured starting
   balance, threshold auto-top-up, checkout invalidating the session) are

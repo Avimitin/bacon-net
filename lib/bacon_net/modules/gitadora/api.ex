@@ -1,5 +1,5 @@
 defmodule BaconNet.Modules.Gitadora.Api do
-  @moduledoc "Port of modules/gitadora/api.py."
+  @moduledoc false
 
   import Plug.Conn, only: [send_resp: 3]
 

@@ -1,5 +1,5 @@
 defmodule BaconNet.Modules.Iidx.Iidx32ranking do
-  @moduledoc "Port of modules/iidx/iidx32ranking.py."
+  @moduledoc false
 
   alias BaconNet.{Core, E}
 

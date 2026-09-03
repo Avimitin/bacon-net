@@ -1,5 +1,5 @@
 defmodule BaconNet.Modules.Gitadora.Gameinfo do
-  @moduledoc "Port of modules/gitadora/gameinfo.py."
+  @moduledoc false
 
   alias BaconNet.{Core, E}
 

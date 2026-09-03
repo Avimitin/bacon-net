@@ -1,5 +1,5 @@
 defmodule BaconNet.Modules.Drs.Game do
-  @moduledoc "Port of modules/drs/game.py."
+  @moduledoc false
 
   alias BaconNet.{Core, DB, E, Kbinxml, Scores, XNode}
 

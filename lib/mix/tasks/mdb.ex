@@ -1,6 +1,6 @@
 defmodule Mix.Tasks.Mdb do
   @moduledoc """
-  IIDX music_data.bin tool (utils/musicdata_tool.py CLI counterpart).
+  Read, create, and merge IIDX `music_data.bin` files.
 
       mix mdb --input music_data.bin --output songs.json --extract
       mix mdb --input songs.json --output music_data.bin --create

@@ -1,5 +1,5 @@
 defmodule BaconNet.Modules.Drs.Eventlog do
-  @moduledoc "Port of modules/drs/eventlog.py."
+  @moduledoc false
 
   alias BaconNet.{Core, E}
 

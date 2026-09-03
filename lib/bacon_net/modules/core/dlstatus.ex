@@ -1,5 +1,5 @@
 defmodule BaconNet.Modules.Core.Dlstatus do
-  @moduledoc "Port of modules/core/dlstatus.py."
+  @moduledoc false
 
   alias BaconNet.{Core, E}
 

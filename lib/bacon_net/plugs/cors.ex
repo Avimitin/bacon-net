@@ -1,6 +1,6 @@
 defmodule BaconNet.Plugs.CORS do
   @moduledoc """
-  CORS headers for allowlisted origins (FastAPI CORSMiddleware counterpart).
+  CORS headers for allowlisted origins.
 
   Only request origins listed in `config :bacon_net, cors_origins` (default
   `[]`) receive CORS headers; the allowlist is reflected origin-for-origin and

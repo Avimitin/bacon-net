@@ -1,7 +1,7 @@
 defmodule BaconNet.State do
   @moduledoc """
-  Tiny key-value Agent for ephemeral runtime state that game modules kept in
-  module-level Python globals (e.g. eacoin sessions, lobby entries).
+  Tiny key-value Agent for ephemeral game and session state that does not
+  require durable storage, such as eacoin sessions and lobby entries.
   """
 
   use Agent

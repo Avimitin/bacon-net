@@ -1,7 +1,6 @@
 defmodule Mix.Tasks.Import.IidxAutomap do
   @moduledoc """
-  Import IIDX scores from a spice automap XML dump
-  (utils/db/import_iidx_spice_automap.py counterpart).
+  Import IIDX scores from a spice automap XML dump.
 
       mix import.iidx_automap --automap_xml automap.xml --version 30 --iidx_id 12345678
 

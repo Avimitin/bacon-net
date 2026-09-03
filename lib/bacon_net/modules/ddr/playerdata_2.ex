@@ -1,5 +1,5 @@
 defmodule BaconNet.Modules.Ddr.Playerdata2 do
-  @moduledoc "Port of modules/ddr/playerdata_2.py (DDR A3, game version 20)."
+  @moduledoc false
 
   alias BaconNet.{Core, DB, E, Scores, XNode}
 

@@ -1,5 +1,5 @@
 defmodule BaconNet.Modules.Iidx.Api do
-  @moduledoc "Port of modules/iidx/api.py."
+  @moduledoc false
 
   import Bitwise
   import Plug.Conn, only: [send_resp: 3]

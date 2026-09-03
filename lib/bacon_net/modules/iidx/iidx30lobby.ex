@@ -1,5 +1,5 @@
 defmodule BaconNet.Modules.Iidx.Iidx30lobby do
-  @moduledoc "Port of modules/iidx/iidx30lobby.py."
+  @moduledoc false
 
   alias BaconNet.{Core, E, State, XNode}
 

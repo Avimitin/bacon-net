@@ -1,5 +1,5 @@
 defmodule BaconNet.Modules.Gitadora.Cardutil do
-  @moduledoc "Port of modules/gitadora/cardutil.py."
+  @moduledoc "GITADORA card lookup and registration handlers."
 
   alias BaconNet.{Core, DB, E, XNode}
 
@@ -94,7 +94,7 @@ defmodule BaconNet.Modules.Gitadora.Cardutil do
     game_profile = %{
       "game_version" => game_version,
       "name" => "kors k",
-      "title" => "MONKEY BUSINESS",
+      "title" => "BACON-NET",
       "charaid" => 0,
       "stickers" => %{},
       "rival_card_ids" => []

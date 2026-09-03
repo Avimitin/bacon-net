@@ -1,6 +1,6 @@
 defmodule BaconNet.Registry do
   @moduledoc """
-  Registry of game protocol modules (the FastAPI routers of modules/).
+  Registry of game protocol modules.
 
   Each game module exposes `routes/0`:
 
@@ -19,7 +19,7 @@ defmodule BaconNet.Registry do
 
   alias BaconNet.Config
 
-  # Legacy unauthenticated per-game JSON APIs (modules/*/api.py ports).
+  # Optional unauthenticated per-game JSON APIs.
   # Their routes dispatch only when Config.legacy_game_apis() is on.
   @legacy_api_modules [
     BaconNet.Modules.Ddr.Api,

@@ -1,6 +1,6 @@
 defmodule BaconNet.Card do
   @moduledoc """
-  e-amusement card ID <-> Konami ID conversion, ported from utils/card.py.
+  e-amusement card ID <-> Konami ID conversion.
   https://bsnk.me/eamuse/
   """
 

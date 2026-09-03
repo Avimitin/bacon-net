@@ -1,5 +1,5 @@
 defmodule BaconNet.Modules.Sdvx.Eventlog do
-  @moduledoc "Port of modules/sdvx/eventlog.py."
+  @moduledoc false
 
   alias BaconNet.{Config, Core, E}
 

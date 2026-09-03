@@ -1,5 +1,5 @@
 defmodule BaconNet.Modules.Core.Package do
-  @moduledoc "Port of modules/core/package.py."
+  @moduledoc false
 
   alias BaconNet.{Core, E}
 

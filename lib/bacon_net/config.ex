@@ -1,13 +1,12 @@
 defmodule BaconNet.Config do
   @moduledoc """
-  Server configuration (config.py counterpart).
+  Runtime configuration for the game protocol, web interface, and operations.
 
-  Values come from Application env (see config/config.exs, overridable via
-  environment variables in config/runtime.exs) with the same defaults as
-  the Python config.
+  Values come from the application environment (see `config/config.exs`) and
+  can be overridden through `config/runtime.exs` in releases.
   """
 
-  @default_arcade "Ｍ０ＮＫＹＢＵＳ１Ｎ３Ｚ"
+  @default_arcade "ＢＡＣＯＮ－ＮＥＴ"
 
   def ip do
     Application.get_env(:bacon_net, :ip) || detect_ip()
@@ -70,7 +69,7 @@ defmodule BaconNet.Config do
     }
   end
 
-  # UDP socket trick from config.py: no traffic is actually sent.
+  # UDP socket discovery: no traffic is actually sent.
   defp detect_ip do
     case :gen_udp.open(0) do
       {:ok, sock} ->

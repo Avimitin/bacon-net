@@ -1,11 +1,11 @@
-defmodule BaconNet.PortedScoreSavesTest do
+defmodule BaconNet.ScoreSaveIntegrationTest do
   @moduledoc """
-  End-to-end coverage for the score-save handlers ported from the legacy
-  insert/read/upsert path to the transactional `BaconNet.Scores` command:
-  iidx29music/music reg, ddr playerdata/playerdata_2 usersave, sdvx
-  save_m, drs save_musicscore, nostalgia set_stage_result. Each test posts
-  a real kbin request through the router, checks the protocol response,
-  then replays the byte-identical body and asserts no duplicate effects.
+  End-to-end coverage for score-save handlers using the transactional
+  `BaconNet.Scores` command: iidx29music/music reg, DDR
+  playerdata/playerdata_2 usersave, SDVX save_m, DANCERUSH save_musicscore,
+  and NOSTALGIA set_stage_result. Each test posts a real kbin request through
+  the router, checks the protocol response, then replays the byte-identical
+  body and asserts that it produces no duplicate effects.
   """
 
   use ExUnit.Case, async: false
@@ -16,7 +16,7 @@ defmodule BaconNet.PortedScoreSavesTest do
   alias BaconNet.{DB, E, Kbinxml, Repo, Shop, XNode}
   alias BaconNet.Scores.{IdempotencyKey, OutboxEvent, PlayAttempt}
 
-  @pcbid "PORTEDTESTPCBID001"
+  @pcbid "SCORETESTPCBID001"
 
   @doc_tables [
     "iidx_scores",

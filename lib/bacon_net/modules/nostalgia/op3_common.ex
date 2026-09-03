@@ -1,5 +1,5 @@
 defmodule BaconNet.Modules.Nostalgia.Op3Common do
-  @moduledoc "Port of modules/nostalgia/op3_common.py."
+  @moduledoc false
 
   alias BaconNet.{CP932, Core, E, Kbinxml, XNode}
 

@@ -1,5 +1,5 @@
 defmodule BaconNet.Modules.Gitadora.Shopinfo do
-  @moduledoc "Port of modules/gitadora/shopinfo.py."
+  @moduledoc false
 
   alias BaconNet.{Core, E}
 

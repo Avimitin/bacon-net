@@ -1,5 +1,5 @@
 defmodule BaconNet.Modules.Core.Apsmanager do
-  @moduledoc "Port of modules/core/apsmanager.py."
+  @moduledoc false
 
   alias BaconNet.{Core, E}
 

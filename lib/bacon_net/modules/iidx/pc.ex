@@ -1,5 +1,5 @@
 defmodule BaconNet.Modules.Iidx.Pc do
-  @moduledoc "Port of modules/iidx/pc.py."
+  @moduledoc false
 
   import Bitwise
 

@@ -1,5 +1,5 @@
 defmodule BaconNet.Modules.Gitadora.Lobby do
-  @moduledoc "Port of modules/gitadora/lobby.py."
+  @moduledoc false
 
   alias BaconNet.{Core, E, State, XNode}
 

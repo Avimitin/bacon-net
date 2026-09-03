@@ -1,5 +1,5 @@
 defmodule BaconNet.Modules.Ddr.Api do
-  @moduledoc "Port of modules/ddr/api.py (DDR JSON web API)."
+  @moduledoc false
 
   import Plug.Conn
 

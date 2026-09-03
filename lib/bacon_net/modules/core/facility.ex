@@ -1,5 +1,5 @@
 defmodule BaconNet.Modules.Core.Facility do
-  @moduledoc "Port of modules/core/facility.py."
+  @moduledoc false
 
   alias BaconNet.{Config, Core, E, Shop, XNode}
 

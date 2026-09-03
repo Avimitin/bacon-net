@@ -1,6 +1,6 @@
 defmodule BaconNet.Core do
   @moduledoc """
-  Request/response pipeline (core_common.py counterpart).
+  Request/response pipeline for e-amusement traffic.
 
   `process_request/1` decodes an e-amuse request conn into an info map;
   `send_response/2` encodes an XNode response back through the same

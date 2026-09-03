@@ -1,6 +1,6 @@
 defmodule BaconNet.MusicdataTool do
   @moduledoc """
-  IIDX music_data.bin reader/writer, ported from utils/musicdata_tool.py.
+  IIDX `music_data.bin` reader and writer.
   """
 
   alias BaconNet.CP932

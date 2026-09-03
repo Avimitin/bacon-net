@@ -1,7 +1,6 @@
 defmodule BaconNet.E do
   @moduledoc """
-  Element builder, the Elixir counterpart of core_common.py's `E`
-  (an lxml ElementMaker with a stringifying typemap).
+  Builder for e-amusement protocol element trees.
 
   All elements are created through `e/1..3`:
 
@@ -13,7 +12,7 @@ defmodule BaconNet.E do
   The reserved option keys `:__type`, `:__count` and `:__size` map to the
   kbinxml type-hint attributes; every other option becomes a plain attribute.
 
-  Value conversion mirrors the Python typemap:
+  Value conversion follows the protocol's wire conventions:
     * integers/floats/binaries — stringified
     * booleans — `"1"` / `"0"`
     * lists — space-joined, `__count` set to the length (for node values),
@@ -94,7 +93,7 @@ defmodule BaconNet.E do
 
   defp keyword?(list), do: Enum.all?(list, &match?({k, _} when is_atom(k), &1))
 
-  @doc "Stringify a scalar the way the Python typemap did."
+  @doc "Stringify a scalar for protocol attributes and values."
   def stringify(v) when is_binary(v), do: v
   def stringify(v) when is_integer(v), do: Integer.to_string(v)
   def stringify(v) when is_float(v), do: to_string(v)

@@ -1,5 +1,5 @@
 defmodule BaconNet.Modules.Core.Cardmng do
-  @moduledoc "Port of modules/core/cardmng.py."
+  @moduledoc false
 
   alias BaconNet.{Core, DB, E, XNode}
 

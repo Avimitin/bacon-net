@@ -1,7 +1,9 @@
 defmodule BaconNet.Kbinxml do
   @moduledoc """
-  Konami binary XML (kbin) codec, ported from the kbinxml Python library
-  (kbinxml.py, bytebuffer.py, format_ids.py, sixbit.py by mon).
+  Konami binary XML (kbin) codec.
+
+  The implementation follows the established kbinxml wire behavior described
+  by kbinxml.py, bytebuffer.py, format_ids.py, and sixbit.py by mon.
 
   Decode: `decode/1` accepts binary kbin or text XML and returns an
   `%BaconNet.XNode{}` tree. Encode: `encode/2` turns a tree back into binary

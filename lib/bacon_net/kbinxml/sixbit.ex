@@ -1,6 +1,6 @@
 defmodule BaconNet.Kbinxml.Sixbit do
   @moduledoc """
-  Six-bit packed node name codec, ported from kbinxml's sixbit.py.
+  Six-bit packed node name codec for Konami binary XML.
   """
 
   import Bitwise

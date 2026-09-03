@@ -1,5 +1,5 @@
 defmodule BaconNet.Modules.Iidx.Music do
-  @moduledoc "Port of modules/iidx/music.py."
+  @moduledoc false
 
   alias BaconNet.{Config, Core, DB, E, XNode}
   alias BaconNet.Modules.Iidx.ScoreSave

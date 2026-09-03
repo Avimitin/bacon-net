@@ -1,5 +1,5 @@
 defmodule BaconNet.Api do
-  @moduledoc "Helpers for JSON API handlers (modules/*/api.py counterparts)."
+  @moduledoc "Shared JSON response and authorization helpers."
 
   import Plug.Conn
 

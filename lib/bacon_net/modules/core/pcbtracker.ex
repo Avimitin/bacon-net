@@ -1,5 +1,5 @@
 defmodule BaconNet.Modules.Core.Pcbtracker do
-  @moduledoc "Port of modules/core/pcbtracker.py."
+  @moduledoc false
 
   alias BaconNet.{Config, Core, E}
 

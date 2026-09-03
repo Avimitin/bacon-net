@@ -1,5 +1,5 @@
 defmodule BaconNet.Modules.Iidx.Iidx31streaming do
-  @moduledoc "Port of modules/iidx/iidx31streaming.py."
+  @moduledoc false
 
   alias BaconNet.{Core, E}
 

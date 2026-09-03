@@ -1,7 +1,6 @@
 defmodule Mix.Tasks.Import.DdrAutomap do
   @moduledoc """
-  Import DDR scores from a spice automap XML dump
-  (utils/db/import_ddr_spice_automap.py counterpart).
+  Import DDR scores from a spice automap XML dump.
 
       mix import.ddr_automap --automap_xml automap.xml --version 3 --ddr_id 12345678
 

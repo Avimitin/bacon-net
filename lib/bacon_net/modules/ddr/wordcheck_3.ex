@@ -1,5 +1,5 @@
 defmodule BaconNet.Modules.Ddr.Wordcheck3 do
-  @moduledoc "Port of modules/ddr/wordcheck_3.py."
+  @moduledoc false
 
   alias BaconNet.{Core, E}
 

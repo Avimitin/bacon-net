@@ -1,6 +1,7 @@
 defmodule BaconNet.Router do
   @moduledoc """
-  HTTP entry point (pyeamu.py + modules/__init__.py counterpart).
+  HTTP entry point for e-amusement protocol, player, operator, and
+  operational routes.
   """
 
   use Plug.Router
@@ -29,7 +30,7 @@ defmodule BaconNet.Router do
 
   plug(:dispatch)
 
-  ## services.get (pyeamu.py)
+  ## Protocol service discovery
 
   post "/core" do
     services_get(conn)
@@ -39,7 +40,7 @@ defmodule BaconNet.Router do
     services_get(conn)
   end
 
-  ## Slashless forwarder (modules/__init__.py)
+  ## Slashless protocol forwarder
 
   post "/fwdr" do
     conn = fetch_query_params(conn)

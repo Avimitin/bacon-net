@@ -1,5 +1,5 @@
 defmodule BaconNet.Modules.Ddr.Tax do
-  @moduledoc "Port of modules/ddr/tax.py."
+  @moduledoc false
 
   alias BaconNet.{Core, E}
 

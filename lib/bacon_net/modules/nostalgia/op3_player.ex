@@ -1,5 +1,5 @@
 defmodule BaconNet.Modules.Nostalgia.Op3Player do
-  @moduledoc "Port of modules/nostalgia/op3_player.py."
+  @moduledoc false
 
   alias BaconNet.{Core, DB, E, Scores, XNode}
 
