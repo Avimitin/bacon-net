@@ -1,0 +1,4 @@
+interface:
+  display_name: "Carbon Product UI"
+  short_description: "Design and review task-focused Carbon UIs"
+  default_prompt: "Use $carbon-product-ui to design or review this React interface with Carbon patterns."
