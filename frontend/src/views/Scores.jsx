@@ -13,11 +13,8 @@ import {
   TableContainer,
   Pagination,
   Tag,
-  Stack,
   InlineLoading,
   InlineNotification,
-  SkeletonText,
-  SkeletonPlaceholder,
 } from "@carbon/react";
 import { Checkmark } from "@carbon/icons-react";
 import { api, getGames } from "../api.js";
@@ -25,6 +22,7 @@ import { useAuthFailure } from "../session.jsx";
 import { gameIcon } from "../gameIcons.js";
 import { scoreColumns } from "../schema.js";
 import { fmtTs, humanError } from "../util.js";
+import { PageState, SectionHeading, SignalHero } from "../components/SignalLayout.jsx";
 
 const PAGE_SIZES = [25, 50, 100, 200];
 const DEFAULT_PAGE_SIZE = 50;
@@ -90,42 +88,14 @@ export default function Scores() {
   }, [page, pageSize]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (error && !pageData) {
-    return (
-      <InlineNotification
-        kind="error"
-        title="Could not load scores"
-        subtitle={error}
-        hideCloseButton
-        lowContrast
-      />
-    );
+    return <PageState kind="error" title="Could not load scores" description={error} />;
   }
 
   if (!pageData || !gamesMeta) {
-    return (
-      <Stack gap={6} style={{ marginTop: "1rem" }}>
-        <SkeletonText heading width="30%" />
-        <SkeletonPlaceholder style={{ width: "100%", height: "20rem" }} />
-      </Stack>
-    );
+    return <PageState title="Loading score archive…" />;
   }
 
   const items = pageData.items || [];
-
-  if (!items.length && page === 1) {
-    return (
-      <Stack gap={6} style={{ marginTop: "1rem" }}>
-        <h1>My scores</h1>
-        <InlineNotification
-          kind="info"
-          title="No scores yet"
-          subtitle="Play some charts — your records will land here."
-          hideCloseButton
-          lowContrast
-        />
-      </Stack>
-    );
-  }
 
   const onPageChange = ({ page: nextPage, pageSize: nextSize }) => {
     if (nextSize !== pageSize) {
@@ -167,7 +137,7 @@ export default function Scores() {
     const row = {
       id: `${r.game}:${r.table}:${r.timestamp ?? i}:${i}`,
       game: (
-        <span style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem" }}>
+        <span className="signal-table__game">
           {icon && <img src={icon} alt="" width={20} height={20} />}
           {gameName(r.game)}
         </span>
@@ -188,92 +158,120 @@ export default function Scores() {
   ];
 
   return (
-    <Stack gap={6} style={{ marginTop: "1rem" }}>
-      <h1>My scores</h1>
-      {error && (
-        <InlineNotification
-          kind="error"
-          title="Could not load this page"
-          subtitle={error}
-          hideCloseButton
-          lowContrast
+    <div className="signal-page scores-page">
+      <SignalHero
+        index="02"
+        eyebrow="Performance archive"
+        title="Every play leaves"
+        accent="a signal."
+        description="Scan your recent records across every connected game, then narrow the loaded page by title, chart, score, or table."
+        tone="purple"
+        metrics={[
+          { label: "Page", value: String(page).padStart(2, "0") },
+          { label: "Loaded", value: String(items.length).padStart(2, "0") },
+        ]}
+        visualLabel="Records / chronological stream"
+      />
+
+      <section className="signal-page__body" aria-label="Score archive">
+        <SectionHeading
+          index="02.A"
+          eyebrow="Loaded records"
+          title="Score archive"
+          description="Filters affect this loaded page only. Pagination requests the next block from the server."
         />
-      )}
-      <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", alignItems: "flex-end" }}>
-        <Dropdown
-          id="score-game-filter"
-          titleText="Game"
-          label="All games"
-          items={gameItems}
-          itemToString={(item) => (item ? item.label : "")}
-          selectedItem={gameItems.find((g) => g.id === gameFilter) ?? gameItems[0]}
-          onChange={({ selectedItem }) => setParams({ game: selectedItem?.id || null })}
-          style={{ minWidth: "14rem" }}
-        />
-        <Search
-          id="score-filter"
-          labelText="Filter rows"
-          placeholder="filter by song, score, chart…"
-          value={filter}
-          onChange={(e) => setParams({ q: e.target.value || null })}
-          style={{ flex: 1, minWidth: "16rem" }}
-        />
-      </div>
-      <p style={{ color: "var(--cds-text-secondary)", fontSize: "0.875rem", marginTop: "-1rem" }}>
-        Game and text filters apply only to the rows loaded on this page.
-      </p>
-      {loading && <InlineLoading description="Loading scores…" />}
-      {rows.length ? (
-        <DataTable rows={rows} headers={headers}>
-          {({ rows, headers, getTableProps, getHeaderProps, getRowProps }) => (
-            <TableContainer title={`Page ${page}`}>
-              <Table {...getTableProps()} size="sm">
-                <TableHead>
-                  <TableRow>
-                    {headers.map((h) => (
-                      <TableHeader key={h.key} {...getHeaderProps({ header: h })}>
-                        {h.header}
-                      </TableHeader>
-                    ))}
-                  </TableRow>
-                </TableHead>
-                <TableBody>
-                  {rows.map((row) => (
-                    <TableRow key={row.id} {...getRowProps({ row })}>
-                      {row.cells.map((cell) => (
-                        <TableCell key={cell.id}>{cell.value}</TableCell>
-                      ))}
-                    </TableRow>
-                  ))}
-                </TableBody>
-              </Table>
-            </TableContainer>
-          )}
-        </DataTable>
-      ) : (
-        !loading && (
+        {error && (
           <InlineNotification
-            kind="info"
-            title="Nothing matches on this page"
-            subtitle="Try a different filter, or move to another page."
+            kind="error"
+            title="Could not load this page"
+            subtitle={error}
             hideCloseButton
             lowContrast
           />
-        )
-      )}
-      <Pagination
-        id="scores-pagination"
-        page={page}
-        pageSize={pageSize}
-        pageSizes={PAGE_SIZES}
-        pagesUnknown
-        isLastPage={!pageData.next_cursor}
-        itemsPerPageText="Rows per page"
-        backwardText="Previous page"
-        forwardText="Next page"
-        onChange={onPageChange}
-      />
-    </Stack>
+        )}
+        <div className="signal-filter-grid signal-filter-grid--scores">
+          <div className="signal-control signal-control--game">
+            <Dropdown
+              id="score-game-filter"
+              titleText="Game"
+              label="All games"
+              items={gameItems}
+              itemToString={(item) => (item ? item.label : "")}
+              selectedItem={gameItems.find((g) => g.id === gameFilter) ?? gameItems[0]}
+              onChange={({ selectedItem }) => setParams({ game: selectedItem?.id || null })}
+            />
+          </div>
+          <div className="signal-control signal-control--search">
+            <Search
+              id="score-filter"
+              labelText="Filter rows"
+              placeholder="Filter by song, score, chart…"
+              value={filter}
+              onChange={(e) => setParams({ q: e.target.value || null })}
+            />
+          </div>
+        </div>
+
+        <div className="signal-table-plane">
+          <div className="signal-table-plane__meta">
+            <span>PAGE / {String(page).padStart(2, "0")}</span>
+            <span>{rows.length} VISIBLE / {items.length} LOADED</span>
+          </div>
+          {loading && <InlineLoading description="Loading scores…" />}
+          {rows.length ? (
+            <DataTable rows={rows} headers={headers}>
+              {({ rows, headers, getTableProps, getHeaderProps, getRowProps }) => (
+                <TableContainer>
+                  <Table {...getTableProps()} size="sm">
+                    <TableHead>
+                      <TableRow>
+                        {headers.map((header) => (
+                          <TableHeader key={header.key} {...getHeaderProps({ header })}>
+                            {header.header}
+                          </TableHeader>
+                        ))}
+                      </TableRow>
+                    </TableHead>
+                    <TableBody>
+                      {rows.map((row) => (
+                        <TableRow key={row.id} {...getRowProps({ row })}>
+                          {row.cells.map((cell) => (
+                            <TableCell key={cell.id}>{cell.value}</TableCell>
+                          ))}
+                        </TableRow>
+                      ))}
+                    </TableBody>
+                  </Table>
+                </TableContainer>
+              )}
+            </DataTable>
+          ) : (
+            !loading && (
+              <div className="signal-empty-plane signal-empty-plane--compact">
+                <h3>{items.length ? "Nothing matches on this page" : "No scores yet"}</h3>
+                <p>
+                  {items.length
+                    ? "Try a different filter, or move to another page."
+                    : "Play some charts — your records will land here."}
+                </p>
+              </div>
+            )
+          )}
+          <Pagination
+            id="scores-pagination"
+            page={page}
+            pageSize={pageSize}
+            pageSizes={PAGE_SIZES}
+            pagesUnknown
+            isLastPage={!pageData.next_cursor}
+            itemsPerPageText="Rows per page"
+            backwardText="Previous page"
+            forwardText="Next page"
+            onChange={onPageChange}
+          />
+        </div>
+      </section>
+    </div>
   );
 }
 

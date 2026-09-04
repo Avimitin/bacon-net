@@ -163,7 +163,14 @@ export const api = {
 let gamesPromise = null;
 
 export function getGames() {
-  gamesPromise ??= api.games().then((d) => d.games);
+  gamesPromise ??= api
+    .games()
+    .then((d) => d.games)
+    .catch((error) => {
+      // A failed metadata request must not poison every later retry.
+      gamesPromise = null;
+      throw error;
+    });
   return gamesPromise;
 }
 

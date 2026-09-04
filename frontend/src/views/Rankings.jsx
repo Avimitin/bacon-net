@@ -12,16 +12,14 @@ import {
   TableCell,
   TableContainer,
   Tag,
-  Stack,
   InlineLoading,
   InlineNotification,
-  SkeletonText,
-  SkeletonPlaceholder,
 } from "@carbon/react";
 import { api, getGames, scoreTableMeta } from "../api.js";
 import { useAuthFailure } from "../session.jsx";
 import { gameIcon } from "../gameIcons.js";
 import { fmtDate, compare, humanError } from "../util.js";
+import { PageState, SectionHeading, SignalHero } from "../components/SignalLayout.jsx";
 
 const HEADERS = [
   { key: "rank", header: "Rank" },
@@ -123,24 +121,11 @@ export default function Rankings() {
   }, [game, song, chart, limit]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loadError) {
-    return (
-      <InlineNotification
-        kind="error"
-        title="Could not load rankings"
-        subtitle={loadError}
-        hideCloseButton
-        lowContrast
-      />
-    );
+    return <PageState kind="error" title="Could not load rankings" description={loadError} />;
   }
 
   if (!gamesMeta) {
-    return (
-      <Stack gap={6} style={{ marginTop: "1rem" }}>
-        <SkeletonText heading width="30%" />
-        <SkeletonPlaceholder style={{ width: "100%", height: "20rem" }} />
-      </Stack>
-    );
+    return <PageState title="Loading leaderboard controls…" />;
   }
 
   const songField = bestTable?.song_field ?? "song";
@@ -165,7 +150,7 @@ export default function Rankings() {
     id: String(i),
     rank: e.rank,
     name: (
-      <span style={{ display: "inline-flex", alignItems: "center", gap: "0.5rem" }}>
+      <span className="signal-table__player">
         {e.name ?? "—"}
         {mine.has(String(e.game_id)) && (
           <Tag type="green" size="sm">
@@ -179,131 +164,168 @@ export default function Rankings() {
   }));
 
   return (
-    <Stack gap={6} style={{ marginTop: "1rem" }}>
-      <h1 style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-        Rankings
-        {icon && <img src={icon} alt="" width={32} height={32} />}
-      </h1>
-      <div style={{ display: "flex", gap: "1rem", flexWrap: "wrap", alignItems: "flex-end" }}>
-        <Dropdown
-          id="ranking-game"
-          titleText="Game"
-          label="Pick a game"
-          items={gamesMeta}
-          itemToString={(item) => (item ? item.name : "")}
-          selectedItem={gameMeta}
-          onChange={({ selectedItem }) =>
-            setParams({ game: selectedItem?.key || null, song: null, chart: null })
-          }
-          style={{ minWidth: "16rem" }}
-        />
-        <ComboBox
-          id="ranking-song"
-          titleText="Song"
-          placeholder="song id — pick or type one"
-          items={songIds}
-          allowCustomValue
-          disabled={!game}
-          selectedItem={song || null}
-          onChange={({ selectedItem }) =>
-            setParams({ song: selectedItem ? String(selectedItem) : null, chart: null })
-          }
-          invalid={Boolean(song) && !isInt(song)}
-          invalidText="Song id must be a number"
-          style={{ minWidth: "12rem" }}
-        />
-        <ComboBox
-          id="ranking-chart"
-          titleText="Chart"
-          placeholder="chart id — pick or type one"
-          items={chartIds}
-          allowCustomValue
-          disabled={!song}
-          selectedItem={chart || null}
-          onChange={({ selectedItem }) =>
-            setParams({ chart: selectedItem ? String(selectedItem) : null })
-          }
-          invalid={Boolean(chart) && !isInt(chart)}
-          invalidText="Chart id must be a number"
-          style={{ minWidth: "10rem" }}
-        />
-        <Dropdown
-          id="ranking-limit"
-          titleText="Top"
-          label="50"
-          items={LIMITS}
-          itemToString={(item) => (item ? String(item) : "")}
-          selectedItem={limit}
-          onChange={({ selectedItem }) =>
-            setParams({ limit: selectedItem === 50 ? null : selectedItem })
-          }
-          style={{ minWidth: "7rem" }}
-        />
-      </div>
+    <div className="signal-page rankings-page">
+      <SignalHero
+        index="03"
+        eyebrow="Competitive field"
+        title="Find your place"
+        accent="in the field."
+        description="Choose one game, song, and chart to resolve a precise leaderboard. Your own identities are marked in the result."
+        tone="teal"
+        metrics={[
+          { label: "Top", value: String(limit).padStart(2, "0") },
+          { label: "Entries", value: String(board?.items?.length ?? 0).padStart(2, "0") },
+        ]}
+        visualLabel="Global rank / personal position"
+      />
 
-      {!selectionValid && (
-        <InlineNotification
-          kind="info"
-          title="Pick a game, song, and chart"
-          subtitle="The leaderboard loads once all three are set. Song and chart suggestions come from your own records, but any id can be typed."
-          hideCloseButton
-          lowContrast
+      <section className="signal-page__body" aria-label="Leaderboard query">
+        <SectionHeading
+          index="03.A"
+          eyebrow="Chart coordinates"
+          title="Build a leaderboard"
+          description="Suggestions come from your own records. Numeric song and chart IDs can also be entered directly."
         />
-      )}
-      {boardLoading && <InlineLoading description="Loading leaderboard…" />}
-      {boardError && (
-        <InlineNotification
-          kind="error"
-          title="Could not load the leaderboard"
-          subtitle={boardError}
-          hideCloseButton
-          lowContrast
-        />
-      )}
-      {board && !boardError && (
-        <>
-          <p style={{ color: "var(--cds-text-secondary)", fontSize: "0.875rem" }}>
-            {gameMeta?.name ?? board.game} · song {board.song} · chart {board.chart} · top{" "}
-            {limit} of {scoreTableMeta(gamesMeta, game, board.table)?.kind ?? board.table}
-          </p>
-          {entryRows.length ? (
-            <DataTable rows={entryRows} headers={HEADERS}>
-              {({ rows, headers, getTableProps, getHeaderProps, getRowProps }) => (
-                <TableContainer>
-                  <Table {...getTableProps()} size="sm">
-                    <TableHead>
-                      <TableRow>
-                        {headers.map((h) => (
-                          <TableHeader key={h.key} {...getHeaderProps({ header: h })}>
-                            {h.header}
-                          </TableHeader>
-                        ))}
-                      </TableRow>
-                    </TableHead>
-                    <TableBody>
-                      {rows.map((row) => (
-                        <TableRow key={row.id} {...getRowProps({ row })}>
-                          {row.cells.map((cell) => (
-                            <TableCell key={cell.id}>{cell.value}</TableCell>
-                          ))}
-                        </TableRow>
-                      ))}
-                    </TableBody>
-                  </Table>
-                </TableContainer>
-              )}
-            </DataTable>
-          ) : (
+
+        <div className="signal-filter-grid signal-filter-grid--rankings">
+          <div className="signal-control">
+            <span className="signal-control__step" aria-hidden="true">01</span>
+            <Dropdown
+              id="ranking-game"
+              titleText="Game"
+              label="Pick a game"
+              items={gamesMeta}
+              itemToString={(item) => (item ? item.name : "")}
+              selectedItem={gameMeta}
+              onChange={({ selectedItem }) =>
+                setParams({ game: selectedItem?.key || null, song: null, chart: null })
+              }
+            />
+          </div>
+          <div className="signal-control">
+            <span className="signal-control__step" aria-hidden="true">02</span>
+            <ComboBox
+              id="ranking-song"
+              titleText="Song"
+              placeholder="Pick or type an ID"
+              items={songIds}
+              allowCustomValue
+              disabled={!game}
+              selectedItem={song || null}
+              onChange={({ selectedItem }) =>
+                setParams({ song: selectedItem ? String(selectedItem) : null, chart: null })
+              }
+              invalid={Boolean(song) && !isInt(song)}
+              invalidText="Song id must be a number"
+            />
+          </div>
+          <div className="signal-control">
+            <span className="signal-control__step" aria-hidden="true">03</span>
+            <ComboBox
+              id="ranking-chart"
+              titleText="Chart"
+              placeholder="Pick or type an ID"
+              items={chartIds}
+              allowCustomValue
+              disabled={!song}
+              selectedItem={chart || null}
+              onChange={({ selectedItem }) =>
+                setParams({ chart: selectedItem ? String(selectedItem) : null })
+              }
+              invalid={Boolean(chart) && !isInt(chart)}
+              invalidText="Chart id must be a number"
+            />
+          </div>
+          <div className="signal-control">
+            <span className="signal-control__step" aria-hidden="true">04</span>
+            <Dropdown
+              id="ranking-limit"
+              titleText="Top"
+              label="50"
+              items={LIMITS}
+              itemToString={(item) => (item ? String(item) : "")}
+              selectedItem={limit}
+              onChange={({ selectedItem }) =>
+                setParams({ limit: selectedItem === 50 ? null : selectedItem })
+              }
+            />
+          </div>
+        </div>
+
+        <div className="leaderboard-plane">
+          <div className="leaderboard-plane__identity">
+            <div className="leaderboard-plane__icon">
+              {icon ? <img src={icon} alt="" /> : <span aria-hidden="true">03</span>}
+            </div>
+            <div>
+              <p>{selectionValid ? "Resolved chart" : "Awaiting coordinates"}</p>
+              <h2>
+                {selectionValid
+                  ? `${gameMeta?.name ?? game} / ${song}.${chart}`
+                  : "Select game, song, and chart"}
+              </h2>
+            </div>
+          </div>
+
+          {!selectionValid && (
+            <div className="signal-empty-plane signal-empty-plane--dark">
+              <h3>Three coordinates define the field.</h3>
+              <p>The leaderboard resolves as soon as game, song, and chart are valid.</p>
+            </div>
+          )}
+          {boardLoading && <InlineLoading description="Loading leaderboard…" />}
+          {boardError && (
             <InlineNotification
-              kind="info"
-              title="No scores for this chart yet"
-              subtitle="Be the first to set a record."
+              kind="error"
+              title="Could not load the leaderboard"
+              subtitle={boardError}
               hideCloseButton
               lowContrast
             />
           )}
-        </>
-      )}
-    </Stack>
+          {board && !boardError && (
+            <>
+              <div className="signal-table-plane__meta">
+                <span>TOP {limit} / {scoreTableMeta(gamesMeta, game, board.table)?.kind ?? board.table}</span>
+                <span>{entryRows.length} RANKED</span>
+              </div>
+              {entryRows.length ? (
+                <DataTable rows={entryRows} headers={HEADERS}>
+                  {({ rows, headers, getTableProps, getHeaderProps, getRowProps }) => (
+                    <TableContainer>
+                      <Table {...getTableProps()} size="sm">
+                        <TableHead>
+                          <TableRow>
+                            {headers.map((header) => (
+                              <TableHeader key={header.key} {...getHeaderProps({ header })}>
+                                {header.header}
+                              </TableHeader>
+                            ))}
+                          </TableRow>
+                        </TableHead>
+                        <TableBody>
+                          {rows.map((row) => (
+                            <TableRow key={row.id} {...getRowProps({ row })}>
+                              {row.cells.map((cell) => (
+                                <TableCell key={cell.id}>{cell.value}</TableCell>
+                              ))}
+                            </TableRow>
+                          ))}
+                        </TableBody>
+                      </Table>
+                    </TableContainer>
+                  )}
+                </DataTable>
+              ) : (
+                <div className="signal-empty-plane signal-empty-plane--dark">
+                  <h3>No scores for this chart yet</h3>
+                  <p>Be the first to set a record.</p>
+                </div>
+              )}
+            </>
+          )}
+        </div>
+      </section>
+    </div>
   );
 }

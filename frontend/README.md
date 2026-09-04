@@ -5,13 +5,15 @@ card binding, per-game profile settings, personal scores, server-wide rankings,
 plus an operator admin area (shops, users, raw table access).
 
 React single-page app built with Vite, routed with `react-router` (HashRouter),
-UI built entirely with Carbon Design System components (`@carbon/react`,
-`@carbon/icons-react`) under the `g100` dark theme. No custom theme CSS.
+with Carbon Design System components (`@carbon/react`, `@carbon/icons-react`)
+providing the interaction and accessibility foundation. The `g100` shell and
+`g10` content canvas use the custom **Signal Grid** composition layer documented
+in [`docs/frontend-design-language.md`](../docs/frontend-design-language.md).
 
 Node.js/npm come from Nix — run all npm commands from the repo root:
 
 ```sh
-cd /root/jiongjia-workspace/bacon-net && nix develop --command npm --prefix frontend <args>
+nix develop --command npm --prefix frontend <args>
 ```
 
 ## Development
@@ -40,28 +42,30 @@ Hash-routed (`/login`, `/register` are public); unauthenticated users are
 redirected to `/login`; any 401 from the account API clears the session and
 returns to `/login`.
 
-- `/login`, `/register` — account auth; register can optionally bind a first
-  card right after signup (with a "continue anyway" path if binding fails).
-  Server error codes are shown as human messages, including `account_banned`.
-- `/` — dashboard: greeting, bound cards (`Tag`s with cached Konami IDs), and
-  a `ClickableTile` per owned game profile (game icon + name, player name,
-  game ID, card, masked PIN, version tags, link into the settings editor).
-- `/cards` — bind cards by UID (E004…) or Konami ID, unbind with a confirmation
-  `Modal`; each card lists the game profiles attached to it. Konami IDs are
-  only returned at bind time, so they are cached in `localStorage` for display.
-- `/settings/:table/:docId` — profile editor. Quick-edit name + PIN; version
-  `Tabs`; curated labeled form for IIDX per-version settings (`Toggle`,
-  `Dropdown`, `NumberInput` from `IIDX_FIELDS`) plus an "Advanced" validated
-  raw-JSON `TextArea` per version (used alone for other games). Only changed
-  top-level fields are PATCHed; since the server merges top-level only, a
-  change to `version.<ver>.<field>` sends the entire client-side-merged
-  `version` map.
-- `/scores` — game `Tabs` (only games with rows), history/best
-  `ContentSwitcher` from the games metadata (preferring `best` tables),
-  substring `Search` filter over row JSON, Carbon `DataTable` sorted by song
-  then score descending, per-game columns from `src/schema.js`.
-- `/rankings` — game/table `Dropdown`, entries grouped per song, ranked
-  `DataTable`s with a "you" `Tag` on rows owned by the current user.
+- `/login`, `/register` — full-bleed account access surfaces paired with the
+  account → card → play network model. Registration can optionally bind a first
+  card and offers a "continue anyway" path if that second step fails. Server
+  error codes are shown as human messages, including `account_banned`.
+- `/` — dashboard: a live account → card → profile topology, bounded account
+  summary, profile matrix, and secondary access-card rail. Each profile links
+  to its settings and keeps only the task-relevant player ID and versions in
+  view; cached Konami IDs remain in the card rail.
+- `/cards` — an access ledger for binding by UID (E004…) or Konami ID and
+  unbinding through a compact confirmation `Modal`. Each card exposes its
+  attached profiles as direct settings links. Konami IDs are only returned at
+  bind time, so they are cached in `localStorage` for display.
+- `/settings/:table/:docId` — profile editor with a connected-game identity
+  strip, quick-edit name + PIN, version `Tabs`, and a change-status action
+  rail. IIDX gets curated `Toggle`, `Dropdown`, and `NumberInput` controls from
+  `IIDX_FIELDS`; every game retains an advanced validated JSON `TextArea`.
+  Since the server merges top-level only, changing `version.<ver>.<field>` sends
+  the entire client-side-merged `version` map.
+- `/scores` — chronological score archive with URL-backed game and substring
+  filters, a schema-derived Carbon `DataTable`, and cursor-backed pagination.
+  Filters intentionally apply only to the current server-loaded page.
+- `/rankings` — a four-coordinate game/song/chart/limit query with suggestions
+  from the player's own records and a ranked `DataTable`; a "you" status `Tag`
+  identifies rows owned by the current player.
 - `/admin` — operator area. Admin bearer token prompt (stored separately in
   `localStorage` as `bn.admin`, verified against `/manage/api/tables`; a 401
   clears it and re-prompts). Tabs:
@@ -74,11 +78,21 @@ returns to `/login`.
     and a JSON document editor with live validation (PUT save, PATCH merge,
     create, delete).
   - **Cards** — grouped card listing from `/manage/api/cards`.
+  - **Audit** — cursor-paginated administrative mutations with actor, target,
+    outcome, and request ID.
+
+Every route follows the 4/8/16-column Signal Grid and uses one page `h1`;
+data-backed routes also preserve their geometry across loading, empty, and error
+states. The tracked screenshot runner checks public and authenticated routes at
+1440, 800, and 390 pixels, including page overflow, landmarks, heading
+structure, mobile navigation, and a narrow modal.
 
 ## Layout
 
 ```
 src/api.js      fetch wrapper, player session + admin token storage, games metadata cache
+src/app.css     Signal Grid shell, every route composition, and 2x Grid tokens
+src/components/ shared SignalHero, SectionHeading, auth frame, and route states
 src/util.js     humanError map, timestamp formatters, compare, JSON-object validation
 src/schema.js   per-game score columns, curated IIDX settings fields
 src/gameIcons.js game key → bundled icon asset (src/assets/games/)

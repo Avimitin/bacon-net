@@ -15,35 +15,51 @@ Monorepo layout:
 
 ## Web interface
 
-The Carbon-based interface covers player self-service and operator workflows.
-All identities, cards, scores, and shops shown below are synthetic. Select an
-image to view it at full size.
+The **Signal Grid** interface combines Carbon interaction patterns with a sharp,
+flat visual language governed by IBM's 2x Grid and documented in the
+[frontend design language](docs/frontend-design-language.md). It covers player
+self-service and isolated operator workflows. All identities, cards, scores,
+and shops shown below are synthetic. Select an image to view it at full size.
 
 <table>
   <tr>
     <td width="50%">
-      <a href="docs/webui-dashboard.png"><img src="docs/webui-dashboard.png" alt="Player dashboard showing synthetic cards and four game profiles"></a><br>
-      <sub><strong>Player dashboard</strong> — bound cards and profiles across supported games.</sub>
+      <a href="docs/webui-login.png"><img src="docs/webui-login.png" alt="Signal Grid login view with an account to card to play network diagram"></a><br>
+      <sub><strong>Player access</strong> — a focused login paired with the identity network model.</sub>
     </td>
     <td width="50%">
-      <a href="docs/webui-scores.png"><img src="docs/webui-scores.png" alt="Filtered beatmania IIDX score history populated with synthetic records"></a><br>
-      <sub><strong>Score history</strong> — game filtering, record details, and bounded pagination.</sub>
+      <a href="docs/webui-register.png"><img src="docs/webui-register.png" alt="Signal Grid registration view with username password and optional card controls"></a><br>
+      <sub><strong>Registration</strong> — one account and an optional first card, with a clear recovery path.</sub>
     </td>
   </tr>
   <tr>
     <td width="50%">
+      <a href="docs/webui-dashboard.png"><img src="docs/webui-dashboard.png" alt="Player dashboard showing synthetic cards and four game profiles"></a><br>
+      <sub><strong>Player dashboard</strong> — the live account, card, and game-profile topology.</sub>
+    </td>
+    <td width="50%">
+      <a href="docs/webui-cards.png"><img src="docs/webui-cards.png" alt="Card management view with two synthetic bound cards and connected profiles"></a><br>
+      <sub><strong>Card access</strong> — binding, identifiers, and profile ownership in one ledger.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <a href="docs/webui-scores.png"><img src="docs/webui-scores.png" alt="Filtered beatmania IIDX score history populated with synthetic records"></a><br>
+      <sub><strong>Score archive</strong> — game filtering, record details, and bounded pagination.</sub>
+    </td>
+    <td width="50%">
       <a href="docs/webui-rankings.png"><img src="docs/webui-rankings.png" alt="Synthetic beatmania IIDX leaderboard with the signed-in player highlighted"></a><br>
-      <sub><strong>Rankings</strong> — a chart leaderboard with the signed-in player highlighted.</sub>
+      <sub><strong>Rankings</strong> — a precise chart query with the signed-in player highlighted.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%">
+      <a href="docs/webui-settings.png"><img src="docs/webui-settings.png" alt="beatmania IIDX profile settings with curated per-version controls"></a><br>
+      <sub><strong>Game settings</strong> — quick profile edits and curated per-version IIDX controls.</sub>
     </td>
     <td width="50%">
       <a href="docs/webui-admin-shops.png"><img src="docs/webui-admin-shops.png" alt="Operator shop console showing synthetic permitted and pending cabinets"></a><br>
-      <sub><strong>Operator console</strong> — permitted and pending cabinet workflows.</sub>
-    </td>
-  </tr>
-  <tr>
-    <td colspan="2">
-      <a href="docs/webui-settings.png"><img src="docs/webui-settings.png" alt="beatmania IIDX profile settings with curated per-version controls"></a><br>
-      <sub><strong>Game settings</strong> — quick profile edits and curated per-version IIDX controls.</sub>
+      <sub><strong>Operator console</strong> — isolated cabinet, player, data, and audit workflows.</sub>
     </td>
   </tr>
 </table>
@@ -270,8 +286,8 @@ node scripts/capture_readme_screenshots.mjs
 Set `CHROMIUM_BIN` when the executable has another name. The fixture server
 listens only on `127.0.0.1`, resets only its dedicated PostgreSQL database in
 `/tmp/bacon-net-pg-readme-screenshots`, and never writes runtime data into the
-repository. The capture script replaces the five tracked images under
-`docs/` and also writes an untracked narrow-layout check to `/tmp`.
+repository. The capture script replaces the eight tracked images under
+`docs/` and also writes untracked medium- and narrow-layout checks to `/tmp`.
 
 To serve a fresh frontend build from the dev server, copy it into place:
 `cp -r frontend/dist/* priv/static/` (releases do this automatically).

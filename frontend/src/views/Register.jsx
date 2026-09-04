@@ -6,14 +6,13 @@ import {
   PasswordInput,
   Button,
   InlineNotification,
-  Grid,
-  Column,
-  Tile,
   Stack,
 } from "@carbon/react";
+import { ArrowRight } from "@carbon/icons-react";
 import { api, konamiCache } from "../api.js";
 import { useSession } from "../session.jsx";
 import { humanError } from "../util.js";
+import { AuthFrame } from "../components/SignalLayout.jsx";
 
 export default function Register() {
   const { session, setSession, loading } = useSession();
@@ -57,74 +56,74 @@ export default function Register() {
   };
 
   return (
-    <Grid narrow>
-      <Column sm={4} md={{ span: 4, offset: 2 }} lg={{ span: 6, offset: 5 }}>
-        <Tile style={{ marginTop: "3rem" }}>
-          <Stack gap={6}>
-            <div>
-              <h1>Join the network</h1>
-              <p style={{ color: "var(--cds-text-secondary)" }}>
-                Pick a callsign and grab a card
-              </p>
-            </div>
-            <Form onSubmit={submit}>
-              <Stack gap={6}>
-                <TextInput
-                  id="reg-username"
-                  labelText="Username"
-                  placeholder="e.g. player_one"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  required
-                />
-                <PasswordInput
-                  id="reg-password"
-                  labelText="Password"
-                  placeholder="min. 8 characters"
-                  value={password}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
-                <TextInput
-                  id="reg-card"
-                  labelText="Bind a card now (optional)"
-                  placeholder="E004… or Konami ID"
-                  value={card}
-                  onChange={(e) => setCard(e.target.value)}
-                />
-                {error && (
-                  <InlineNotification
-                    kind="error"
-                    title="Registration failed"
-                    subtitle={error}
-                    hideCloseButton
-                    lowContrast
-                  />
-                )}
-                {bindWarning && (
-                  <InlineNotification
-                    kind="warning"
-                    title="Card not bound"
-                    subtitle={bindWarning}
-                    hideCloseButton
-                    lowContrast
-                  />
-                )}
-                {bindWarning ? (
-                  <Button onClick={() => navigate("/")}>Continue anyway</Button>
-                ) : (
-                  <Button type="submit" disabled={busy}>
-                    {busy ? "Creating…" : "Create account"}
-                  </Button>
-                )}
-              </Stack>
-            </Form>
-            <p style={{ color: "var(--cds-text-secondary)" }}>
-              Already registered? <Link to="/login">Log in</Link>
-            </p>
-          </Stack>
-        </Tile>
-      </Column>
-    </Grid>
+    <AuthFrame
+      index="01"
+      eyebrow="New player"
+      title="Make your"
+      accent="connection."
+      description="Create one account, then bind an e-amusement pass now or whenever you are ready."
+      footer={
+        <>
+          Already registered? <Link to="/login">Log in</Link>
+        </>
+      }
+    >
+      <Form onSubmit={submit}>
+        <Stack gap={6}>
+          <TextInput
+            id="reg-username"
+            labelText="Username"
+            placeholder="e.g. player_one"
+            autoComplete="username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            required
+          />
+          <PasswordInput
+            id="reg-password"
+            labelText="Password"
+            placeholder="min. 8 characters"
+            autoComplete="new-password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+          <TextInput
+            id="reg-card"
+            labelText="Bind a card now (optional)"
+            placeholder="E004… or Konami ID"
+            value={card}
+            onChange={(e) => setCard(e.target.value)}
+          />
+          {error && (
+            <InlineNotification
+              kind="error"
+              title="Registration failed"
+              subtitle={error}
+              hideCloseButton
+              lowContrast
+            />
+          )}
+          {bindWarning && (
+            <InlineNotification
+              kind="warning"
+              title="Card not bound"
+              subtitle={bindWarning}
+              hideCloseButton
+              lowContrast
+            />
+          )}
+          {bindWarning ? (
+            <Button onClick={() => navigate("/")} renderIcon={ArrowRight}>
+              Continue anyway
+            </Button>
+          ) : (
+            <Button type="submit" disabled={busy} renderIcon={ArrowRight}>
+              {busy ? "Creating…" : "Create account"}
+            </Button>
+          )}
+        </Stack>
+      </Form>
+    </AuthFrame>
   );
 }

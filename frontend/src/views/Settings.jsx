@@ -3,8 +3,6 @@ import { Link, useParams } from "react-router";
 import {
   TextInput,
   Button,
-  Tile,
-  Tag,
   Stack,
   Tabs,
   TabList,
@@ -16,16 +14,16 @@ import {
   NumberInput,
   TextArea,
   InlineNotification,
-  SkeletonText,
-  SkeletonPlaceholder,
   Grid,
   Column,
 } from "@carbon/react";
+import { ArrowLeft, Save } from "@carbon/icons-react";
 import { api, getGames, gameForProfileTable } from "../api.js";
 import { useAuthFailure } from "../session.jsx";
 import { gameIcon } from "../gameIcons.js";
 import { humanError, parseJsonObject } from "../util.js";
 import { IIDX_FIELDS } from "../schema.js";
+import { PageState, SectionHeading, SignalHero } from "../components/SignalLayout.jsx";
 
 export default function Settings() {
   const { table, docId } = useParams();
@@ -61,25 +59,11 @@ export default function Settings() {
   }, [table, docId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (loadError) {
-    return (
-      <InlineNotification
-        kind="error"
-        title="Could not load profile"
-        subtitle={loadError}
-        hideCloseButton
-        lowContrast
-      />
-    );
+    return <PageState kind="error" title="Could not load profile" description={loadError} />;
   }
 
   if (!doc) {
-    return (
-      <Stack gap={6} style={{ marginTop: "1rem" }}>
-        <SkeletonText heading width="40%" />
-        <SkeletonPlaceholder style={{ width: "100%", height: "10rem" }} />
-        <SkeletonPlaceholder style={{ width: "100%", height: "16rem" }} />
-      </Stack>
-    );
+    return <PageState title="Loading profile controls…" />;
   }
 
   const activeVer = versions[activeIdx];
@@ -87,6 +71,14 @@ export default function Settings() {
   const isIIDX = game?.key === "iidx";
   const icon = game ? gameIcon(game.key) : null;
   const jsonStatus = parseJsonObject(jsonText);
+  const activeSerialized =
+    activeVer != null && work[activeVer] != null
+      ? JSON.stringify(work[activeVer], null, 2).trim()
+      : "{}";
+  const hasChanges =
+    pin !== String(doc.pin ?? "") ||
+    JSON.stringify(work) !== JSON.stringify(doc.version || {}) ||
+    jsonText.trim() !== activeSerialized;
 
   const setField = (key, value) => {
     const next = { ...work, [activeVer]: { ...work[activeVer], [key]: value } };
@@ -150,28 +142,54 @@ export default function Settings() {
   };
 
   return (
-    <Stack gap={7} style={{ marginTop: "1rem" }}>
-      <div>
-        <p>
-          <Link to="/">← dashboard</Link>
-          <span style={{ color: "var(--cds-text-secondary)", marginLeft: "1rem" }}>
-            {game?.name ?? table} · profile #{docId}
-          </span>
-        </p>
-        <h1 style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-          Profile settings
-          {icon && <img src={icon} alt="" width={36} height={36} />}
-          {game && (
-            <Tag type="magenta" size="sm">
-              {game.key}
-            </Tag>
-          )}
-        </h1>
+    <div className="signal-page settings-page">
+      <SignalHero
+        index="P.01"
+        eyebrow="Profile controls"
+        title="Tune your"
+        accent="player profile."
+        description={`Adjust account-facing controls for ${game?.name ?? table}. Game-owned identity fields remain read-only.`}
+        tone="red"
+        action={
+          <Button as={Link} to="/" kind="tertiary" renderIcon={ArrowLeft}>
+            Dashboard
+          </Button>
+        }
+        metrics={[
+          { label: "Profile", value: `#${docId}` },
+          { label: "Versions", value: String(versions.length).padStart(2, "0") },
+        ]}
+        visualLabel="Profile / version / preferences"
+      />
+
+      <div className="profile-identity-strip">
+        <div className="profile-identity-strip__icon">
+          {icon ? <img src={icon} alt="" /> : <span>{(game?.key ?? table).slice(0, 2)}</span>}
+        </div>
+        <div>
+          <p>Connected game</p>
+          <strong>{game?.name ?? table}</strong>
+        </div>
+        <dl>
+          <div>
+            <dt>Profile</dt>
+            <dd>#{docId}</dd>
+          </div>
+          <div>
+            <dt>Card</dt>
+            <dd>{doc.card}</dd>
+          </div>
+        </dl>
       </div>
 
-      <Tile>
-        <Stack gap={4}>
-          <h3>Quick edit</h3>
+      <div className="signal-page__body settings-layout">
+        <section className="settings-panel" aria-label="Quick edit">
+          <SectionHeading
+            index="P.01.A"
+            eyebrow="Account-facing"
+            title="Quick edit"
+            description="PIN is the only identity control that can be changed outside the game."
+          />
           <Grid narrow>
             <Column sm={4} md={4} lg={6}>
               <TextInput
@@ -192,20 +210,20 @@ export default function Settings() {
                 invalid={Boolean(pin) && !/^\d{4}$/.test(pin)}
                 invalidText="PIN must be exactly 4 digits"
                 onChange={(e) => setPin(e.target.value)}
-                style={{ fontFamily: "monospace" }}
+                className="signal-mono-input"
               />
             </Column>
           </Grid>
-          <p style={{ color: "var(--cds-text-secondary)", fontSize: "0.875rem", fontFamily: "monospace" }}>
-            card {doc.card}
-          </p>
-        </Stack>
-      </Tile>
+        </section>
 
-      {versions.length ? (
-        <Tile>
-          <Stack gap={4}>
-            <h3>Per-version settings</h3>
+        <section className="settings-panel settings-panel--versions" aria-label="Per-version settings">
+          <SectionHeading
+            index="P.01.B"
+            eyebrow="Game-facing"
+            title="Per-version settings"
+            description="Each release keeps its own preferences. Choose a version before editing."
+          />
+          {versions.length ? (
             <Tabs selectedIndex={activeIdx} onChange={selectVersion}>
               <TabList aria-label="Game versions">
                 {versions.map((v) => (
@@ -217,7 +235,7 @@ export default function Settings() {
                   <TabPanel key={v}>
                     {v === activeVer &&
                       (settings != null && typeof settings === "object" ? (
-                        <Stack gap={5} style={{ paddingTop: "1rem" }}>
+                        <Stack gap={5} className="settings-version-form">
                           {isIIDX && (
                             <Grid narrow>
                               {IIDX_FIELDS.filter((f) => f.key in settings).map((f) => (
@@ -228,12 +246,12 @@ export default function Settings() {
                             </Grid>
                           )}
                           {!isIIDX && (
-                            <p style={{ color: "var(--cds-text-secondary)" }}>
+                            <p className="signal-form-note">
                               No curated form for this game — use the JSON editor below.
                             </p>
                           )}
-                          <div>
-                            <div style={{ display: "flex", justifyContent: "flex-end", marginBottom: "0.25rem" }}>
+                          <div className="settings-json-editor">
+                            <div className="settings-json-editor__action">
                               <Button kind="ghost" size="sm" onClick={prettyPrint}>
                                 Pretty-print
                               </Button>
@@ -247,12 +265,12 @@ export default function Settings() {
                               invalid={!jsonStatus.ok}
                               invalidText={`invalid JSON: ${jsonStatus.error}`}
                               helperText={jsonStatus.ok ? "valid JSON" : undefined}
-                              style={{ fontFamily: "monospace" }}
+                              className="signal-json-input"
                             />
                           </div>
                         </Stack>
                       ) : (
-                        <p style={{ color: "var(--cds-text-secondary)", paddingTop: "1rem" }}>
+                        <p className="signal-form-note settings-version-form">
                           No settings for this version.
                         </p>
                       ))}
@@ -260,30 +278,35 @@ export default function Settings() {
                 ))}
               </TabPanels>
             </Tabs>
-          </Stack>
-        </Tile>
-      ) : (
-        <Tile>
-          <p style={{ color: "var(--cds-text-secondary)" }}>This profile has no version data.</p>
-        </Tile>
-      )}
+          ) : (
+            <div className="signal-empty-plane signal-empty-plane--compact">
+              <h3>No version data</h3>
+              <p>This profile has not reported any per-version settings.</p>
+            </div>
+          )}
+        </section>
 
-      <div>
-        <Button onClick={save} disabled={busy}>
-          {busy ? "Saving…" : "Save changes"}
-        </Button>
+        <div className="settings-save-bar">
+          <div>
+            <span className={`settings-save-bar__state${hasChanges ? " is-dirty" : ""}`} aria-hidden="true" />
+            <p>{hasChanges ? "Unsaved changes" : "Profile synchronized"}</p>
+          </div>
+          <Button onClick={save} disabled={busy} renderIcon={Save}>
+            {busy ? "Saving…" : "Save changes"}
+          </Button>
+        </div>
+
+        {notice && (
+          <InlineNotification
+            kind={notice.kind === "info" ? "info" : notice.kind}
+            title={notice.kind === "success" ? "Settings" : notice.kind === "info" ? "Settings" : "Error"}
+            subtitle={notice.text}
+            hideCloseButton
+            lowContrast
+          />
+        )}
       </div>
-
-      {notice && (
-        <InlineNotification
-          kind={notice.kind === "info" ? "info" : notice.kind}
-          title={notice.kind === "success" ? "Settings" : notice.kind === "info" ? "Settings" : "Error"}
-          subtitle={notice.text}
-          hideCloseButton
-          lowContrast
-        />
-      )}
-    </Stack>
+    </div>
   );
 }
 

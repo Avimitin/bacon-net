@@ -6,14 +6,13 @@ import {
   PasswordInput,
   Button,
   InlineNotification,
-  Grid,
-  Column,
-  Tile,
   Stack,
 } from "@carbon/react";
+import { ArrowRight } from "@carbon/icons-react";
 import { api } from "../api.js";
 import { useSession } from "../session.jsx";
 import { humanError } from "../util.js";
+import { AuthFrame } from "../components/SignalLayout.jsx";
 
 export default function Login() {
   const { session, setSession, loading } = useSession();
@@ -44,53 +43,51 @@ export default function Login() {
   };
 
   return (
-    <Grid narrow>
-      <Column sm={4} md={{ span: 4, offset: 2 }} lg={{ span: 6, offset: 5 }}>
-        <Tile style={{ marginTop: "3rem" }}>
-          <Stack gap={6}>
-            <div>
-              <h1>Log in</h1>
-              <p style={{ color: "var(--cds-text-secondary)" }}>
-                Log in with your bacon-net account
-              </p>
-            </div>
-            <Form onSubmit={submit}>
-              <Stack gap={6}>
-                <TextInput
-                  id="login-username"
-                  labelText="Username"
-                  value={username}
-                  onChange={(e) => setUsername(e.target.value)}
-                  required
-                />
-                <PasswordInput
-                  id="login-password"
-                  labelText="Password"
-                  value={password}
-                  ref={passwordRef}
-                  onChange={(e) => setPassword(e.target.value)}
-                  required
-                />
-                {error && (
-                  <InlineNotification
-                    kind="error"
-                    title="Login failed"
-                    subtitle={error}
-                    hideCloseButton
-                    lowContrast
-                  />
-                )}
-                <Button type="submit" disabled={busy}>
-                  {busy ? "Logging in…" : "Log in"}
-                </Button>
-              </Stack>
-            </Form>
-            <p style={{ color: "var(--cds-text-secondary)" }}>
-              New around here? <Link to="/register">Create an account</Link>
-            </p>
-          </Stack>
-        </Tile>
-      </Column>
-    </Grid>
+    <AuthFrame
+      index="00"
+      eyebrow="Player access"
+      title="Return to"
+      accent="the network."
+      description="Your cards, profiles, and records stay connected under one player identity."
+      footer={
+        <>
+          New around here? <Link to="/register">Create an account</Link>
+        </>
+      }
+    >
+      <Form onSubmit={submit}>
+        <Stack gap={6}>
+          <TextInput
+            id="login-username"
+            labelText="Username"
+            autoComplete="username"
+            value={username}
+            onChange={(e) => setUsername(e.target.value)}
+            required
+          />
+          <PasswordInput
+            id="login-password"
+            labelText="Password"
+            autoComplete="current-password"
+            value={password}
+            ref={passwordRef}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+          />
+          {error && (
+            <InlineNotification
+              kind="error"
+              title="Login failed"
+              subtitle={error}
+              hideCloseButton
+              lowContrast
+            />
+          )}
+          <Button type="submit" disabled={busy} renderIcon={ArrowRight}>
+            {busy ? "Logging in…" : "Log in"}
+          </Button>
+        </Stack>
+      </Form>
+    </AuthFrame>
   );
 }

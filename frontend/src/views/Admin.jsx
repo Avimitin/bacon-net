@@ -31,6 +31,7 @@ import {
 } from "@carbon/react";
 import { api, tokens } from "../api.js";
 import { fmtDate, fmtTs, humanError, parseJsonObject } from "../util.js";
+import { SectionHeading, SignalHero } from "../components/SignalLayout.jsx";
 
 export default function Admin() {
   const [unlocked, setUnlocked] = useState(Boolean(tokens.admin));
@@ -42,44 +43,69 @@ export default function Admin() {
   if (!unlocked) return <Gate onUnlock={() => setUnlocked(true)} />;
 
   return (
-    <Stack gap={6} style={{ marginTop: "1rem" }}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-        <h1>Admin</h1>
-        <Button kind="ghost" size="sm" onClick={() => { lock(); }}>
-          Forget token
-        </Button>
+    <div className="signal-page admin-console">
+      <SignalHero
+        index="04"
+        eyebrow="Operator plane"
+        title="Control the"
+        accent="live network."
+        description="Review cabinet access, player state, stored documents, and administrative changes from one isolated operator workspace."
+        tone="dark"
+        action={
+          <Button kind="tertiary" onClick={lock}>
+            Forget token
+          </Button>
+        }
+        metrics={[
+          { label: "Domains", value: "06" },
+          { label: "Token", value: "LIVE" },
+        ]}
+        visualLabel="Operator / service / audit"
+      />
+      <div className="operator-status-strip">
+        <span aria-hidden="true" />
+        <p>Privileged session active</p>
+        <code>ADMIN / LOCAL TOKEN</code>
       </div>
-      <Tabs>
-        <TabList aria-label="Admin areas">
-          <Tab>Shops</Tab>
-          <Tab>Users</Tab>
-          <Tab>Tables</Tab>
-          <Tab>Docs</Tab>
-          <Tab>Cards</Tab>
-          <Tab>Audit</Tab>
-        </TabList>
-        <TabPanels>
-          <TabPanel>
-            <ShopsPanel onLock={lock} />
-          </TabPanel>
-          <TabPanel>
-            <UsersPanel onLock={lock} />
-          </TabPanel>
-          <TabPanel>
-            <TablesPanel onLock={lock} />
-          </TabPanel>
-          <TabPanel>
-            <DocsPanel onLock={lock} />
-          </TabPanel>
-          <TabPanel>
-            <CardsPanel onLock={lock} />
-          </TabPanel>
-          <TabPanel>
-            <AuditPanel onLock={lock} />
-          </TabPanel>
-        </TabPanels>
-      </Tabs>
-    </Stack>
+      <section className="signal-page__body admin-workspace" aria-label="Administration workspaces">
+        <SectionHeading
+          index="04.A"
+          eyebrow="Service domains"
+          title="Administration workspaces"
+          description="Each view keeps one operational task and its destructive actions in a bounded plane."
+        />
+        <Tabs className="admin-tabs">
+          <TabList aria-label="Admin areas" contained>
+            <Tab>Shops</Tab>
+            <Tab>Users</Tab>
+            <Tab>Tables</Tab>
+            <Tab>Docs</Tab>
+            <Tab>Cards</Tab>
+            <Tab>Audit</Tab>
+          </TabList>
+          <TabPanels>
+            <TabPanel>
+              <ShopsPanel onLock={lock} />
+            </TabPanel>
+            <TabPanel>
+              <UsersPanel onLock={lock} />
+            </TabPanel>
+            <TabPanel>
+              <TablesPanel onLock={lock} />
+            </TabPanel>
+            <TabPanel>
+              <DocsPanel onLock={lock} />
+            </TabPanel>
+            <TabPanel>
+              <CardsPanel onLock={lock} />
+            </TabPanel>
+            <TabPanel>
+              <AuditPanel onLock={lock} />
+            </TabPanel>
+          </TabPanels>
+        </Tabs>
+      </section>
+    </div>
   );
 }
 
@@ -110,23 +136,37 @@ function Gate({ onUnlock }) {
   };
 
   return (
-    <Stack gap={6} style={{ marginTop: "1rem", maxWidth: "32rem" }}>
-      <h1>Admin</h1>
-      <Tile>
-        <Stack gap={5}>
-          <p style={{ color: "var(--cds-text-secondary)" }}>
-            Operator area. The admin token is separate from your player login and is stored in
-            this browser only.
-          </p>
+    <div className="signal-page admin-gate">
+      <SignalHero
+        index="04"
+        eyebrow="Restricted plane"
+        title="Operator access"
+        accent="stays isolated."
+        description="Administrative authority is deliberately separate from your player session and stays in this browser only."
+        tone="dark"
+        metrics={[
+          { label: "Player", value: "ON" },
+          { label: "Admin", value: "LOCK" },
+        ]}
+        visualLabel="Player session ≠ operator authority"
+      />
+      <div className="signal-page__body signal-split admin-gate__body">
+        <aside className="signal-form-panel">
+          <SectionHeading
+            index="04.A"
+            eyebrow="Bearer verification"
+            title="Unlock operator tools"
+            description="The token is checked against the service before any controls become available."
+          />
           <Form onSubmit={submit}>
-            <Stack gap={5}>
+            <Stack gap={5} className="signal-form-stack">
               <PasswordInput
                 id="admin-token"
                 labelText="Admin token"
                 placeholder="admin bearer token"
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
-                style={{ fontFamily: "monospace" }}
+                className="signal-mono-input"
               />
               {error && (
                 <InlineNotification
@@ -142,9 +182,14 @@ function Gate({ onUnlock }) {
               </Button>
             </Stack>
           </Form>
-        </Stack>
-      </Tile>
-    </Stack>
+        </aside>
+        <div className="admin-gate__explanation">
+          <p className="admin-gate__index">04 / SECURITY BOUNDARY</p>
+          <h2>Two identities.<br />One clear boundary.</h2>
+          <p>Player authentication never grants operator privileges. Forgetting the token closes only this control plane.</p>
+        </div>
+      </div>
+    </div>
   );
 }
 
@@ -159,7 +204,7 @@ function adminCatch(err, onLock, setError) {
 
 function PanelSkeleton() {
   return (
-    <Stack gap={4} style={{ paddingTop: "1rem" }}>
+    <Stack gap={4} className="admin-panel admin-panel--loading">
       <SkeletonText width="30%" />
       <SkeletonPlaceholder style={{ width: "100%", height: "14rem" }} />
     </Stack>
@@ -287,7 +332,7 @@ function ShopsPanel({ onLock }) {
     : "";
 
   return (
-    <Stack gap={5} style={{ paddingTop: "1rem" }}>
+    <Stack gap={5} className="admin-panel">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
         <h3>Shops</h3>
         <Button onClick={() => setAddOpen(true)}>Add shop</Button>
@@ -332,68 +377,74 @@ function ShopsPanel({ onLock }) {
         />
       )}
 
-      <Modal
-        open={confirm !== null}
-        danger={confirm?.action === "delete"}
-        modalHeading={confirm ? `${capitalize(confirm.action)} shop` : ""}
-        primaryButtonText={confirm ? capitalize(confirm.action) : ""}
-        secondaryButtonText="Cancel"
-        primaryButtonDisabled={busy}
-        onRequestClose={() => {
-          setConfirm(null);
-          setConfirmError(null);
-        }}
-        onRequestSubmit={runConfirm}
-      >
-        <p>{confirmText}</p>
-        {confirmError && (
-          <InlineNotification
-            kind="error"
-            title="Action failed"
-            subtitle={confirmError}
-            hideCloseButton
-            lowContrast
-          />
-        )}
-      </Modal>
-
-      <Modal
-        open={addOpen}
-        modalHeading="Add shop"
-        primaryButtonText="Add"
-        secondaryButtonText="Cancel"
-        primaryButtonDisabled={busy || !addPcbid.trim()}
-        onRequestClose={() => {
-          setAddOpen(false);
-          setAddError(null);
-        }}
-        onRequestSubmit={addShop}
-      >
-        <Stack gap={5}>
-          <TextInput
-            id="add-shop-pcbid"
-            labelText="PCBID (required)"
-            value={addPcbid}
-            onChange={(e) => setAddPcbid(e.target.value)}
-            style={{ fontFamily: "monospace" }}
-          />
-          <TextInput
-            id="add-shop-opname"
-            labelText="Operator name (optional)"
-            value={addOpname}
-            onChange={(e) => setAddOpname(e.target.value)}
-          />
-          {addError && (
+      {confirm !== null && (
+        <Modal
+          size="xs"
+          open
+          danger={confirm?.action === "delete"}
+          modalHeading={confirm ? `${capitalize(confirm.action)} shop` : ""}
+          primaryButtonText={confirm ? capitalize(confirm.action) : ""}
+          secondaryButtonText="Cancel"
+          primaryButtonDisabled={busy}
+          onRequestClose={() => {
+            setConfirm(null);
+            setConfirmError(null);
+          }}
+          onRequestSubmit={runConfirm}
+        >
+          <p>{confirmText}</p>
+          {confirmError && (
             <InlineNotification
               kind="error"
-              title="Could not add shop"
-              subtitle={addError}
+              title="Action failed"
+              subtitle={confirmError}
               hideCloseButton
               lowContrast
             />
           )}
-        </Stack>
-      </Modal>
+        </Modal>
+      )}
+
+      {addOpen && (
+        <Modal
+          size="xs"
+          open
+          modalHeading="Add shop"
+          primaryButtonText="Add"
+          secondaryButtonText="Cancel"
+          primaryButtonDisabled={busy || !addPcbid.trim()}
+          onRequestClose={() => {
+            setAddOpen(false);
+            setAddError(null);
+          }}
+          onRequestSubmit={addShop}
+        >
+          <Stack gap={5}>
+            <TextInput
+              id="add-shop-pcbid"
+              labelText="PCBID (required)"
+              value={addPcbid}
+              onChange={(e) => setAddPcbid(e.target.value)}
+              style={{ fontFamily: "monospace" }}
+            />
+            <TextInput
+              id="add-shop-opname"
+              labelText="Operator name (optional)"
+              value={addOpname}
+              onChange={(e) => setAddOpname(e.target.value)}
+            />
+            {addError && (
+              <InlineNotification
+                kind="error"
+                title="Could not add shop"
+                subtitle={addError}
+                hideCloseButton
+                lowContrast
+              />
+            )}
+          </Stack>
+        </Modal>
+      )}
     </Stack>
   );
 }
@@ -473,7 +524,7 @@ function UsersPanel({ onLock }) {
   }));
 
   return (
-    <Stack gap={5} style={{ paddingTop: "1rem" }}>
+    <Stack gap={5} className="admin-panel">
       <h3>Users</h3>
       {users.length ? (
         <DataTable rows={rows} headers={USER_HEADERS}>
@@ -506,34 +557,37 @@ function UsersPanel({ onLock }) {
         <InlineNotification kind="info" title="No users yet" hideCloseButton lowContrast />
       )}
 
-      <Modal
-        open={confirm !== null}
-        danger={confirm?.action === "ban"}
-        modalHeading={confirm ? `${capitalize(confirm.action)} user` : ""}
-        primaryButtonText={confirm ? capitalize(confirm.action) : ""}
-        secondaryButtonText="Cancel"
-        primaryButtonDisabled={busy}
-        onRequestClose={() => {
-          setConfirm(null);
-          setConfirmError(null);
-        }}
-        onRequestSubmit={runConfirm}
-      >
-        <p>
-          {confirm?.action === "ban"
-            ? `Ban ${confirm?.user.username}? They will no longer be able to log in.`
-            : `Lift the ban on ${confirm?.user.username}?`}
-        </p>
-        {confirmError && (
-          <InlineNotification
-            kind="error"
-            title="Action failed"
-            subtitle={confirmError}
-            hideCloseButton
-            lowContrast
-          />
-        )}
-      </Modal>
+      {confirm !== null && (
+        <Modal
+          size="xs"
+          open
+          danger={confirm?.action === "ban"}
+          modalHeading={confirm ? `${capitalize(confirm.action)} user` : ""}
+          primaryButtonText={confirm ? capitalize(confirm.action) : ""}
+          secondaryButtonText="Cancel"
+          primaryButtonDisabled={busy}
+          onRequestClose={() => {
+            setConfirm(null);
+            setConfirmError(null);
+          }}
+          onRequestSubmit={runConfirm}
+        >
+          <p>
+            {confirm?.action === "ban"
+              ? `Ban ${confirm?.user.username}? They will no longer be able to log in.`
+              : `Lift the ban on ${confirm?.user.username}?`}
+          </p>
+          {confirmError && (
+            <InlineNotification
+              kind="error"
+              title="Action failed"
+              subtitle={confirmError}
+              hideCloseButton
+              lowContrast
+            />
+          )}
+        </Modal>
+      )}
     </Stack>
   );
 }
@@ -591,7 +645,7 @@ function TablesPanel({ onLock }) {
   }));
 
   return (
-    <Stack gap={5} style={{ paddingTop: "1rem" }}>
+    <Stack gap={5} className="admin-panel">
       <h3>Tables</h3>
       {tables.length ? (
         <DataTable rows={rows} headers={TABLE_HEADERS}>
@@ -624,33 +678,36 @@ function TablesPanel({ onLock }) {
         <InlineNotification kind="info" title="No tables" hideCloseButton lowContrast />
       )}
 
-      <Modal
-        open={dropTarget !== null}
-        danger
-        modalHeading="Drop table"
-        primaryButtonText="Drop"
-        secondaryButtonText="Cancel"
-        primaryButtonDisabled={busy}
-        onRequestClose={() => {
-          setDropTarget(null);
-          setDropError(null);
-        }}
-        onRequestSubmit={drop}
-      >
-        <p>
-          Drop table <strong style={{ fontFamily: "monospace" }}>{dropTarget}</strong> and all its
-          documents? This cannot be undone.
-        </p>
-        {dropError && (
-          <InlineNotification
-            kind="error"
-            title="Drop failed"
-            subtitle={dropError}
-            hideCloseButton
-            lowContrast
-          />
-        )}
-      </Modal>
+      {dropTarget !== null && (
+        <Modal
+          size="xs"
+          open
+          danger
+          modalHeading="Drop table"
+          primaryButtonText="Drop"
+          secondaryButtonText="Cancel"
+          primaryButtonDisabled={busy}
+          onRequestClose={() => {
+            setDropTarget(null);
+            setDropError(null);
+          }}
+          onRequestSubmit={drop}
+        >
+          <p>
+            Drop table <strong style={{ fontFamily: "monospace" }}>{dropTarget}</strong> and all its
+            documents? This cannot be undone.
+          </p>
+          {dropError && (
+            <InlineNotification
+              kind="error"
+              title="Drop failed"
+              subtitle={dropError}
+              hideCloseButton
+              lowContrast
+            />
+          )}
+        </Modal>
+      )}
     </Stack>
   );
 }
@@ -789,7 +846,7 @@ function DocsPanel({ onLock }) {
   }));
 
   return (
-    <Stack gap={5} style={{ paddingTop: "1rem" }}>
+    <Stack gap={5} className="admin-panel admin-panel--docs">
       <h3>Docs</h3>
       <Dropdown
         id="docs-table"
@@ -919,20 +976,23 @@ function DocsPanel({ onLock }) {
         </Tile>
       )}
 
-      <Modal
-        open={deleteTarget !== null}
-        danger
-        modalHeading="Delete document"
-        primaryButtonText="Delete"
-        secondaryButtonText="Cancel"
-        primaryButtonDisabled={busy}
-        onRequestClose={() => setDeleteTarget(null)}
-        onRequestSubmit={deleteDoc}
-      >
-        <p>
-          Delete {table} #{deleteTarget}? This cannot be undone.
-        </p>
-      </Modal>
+      {deleteTarget !== null && (
+        <Modal
+          size="xs"
+          open
+          danger
+          modalHeading="Delete document"
+          primaryButtonText="Delete"
+          secondaryButtonText="Cancel"
+          primaryButtonDisabled={busy}
+          onRequestClose={() => setDeleteTarget(null)}
+          onRequestSubmit={deleteDoc}
+        >
+          <p>
+            Delete {table} #{deleteTarget}? This cannot be undone.
+          </p>
+        </Modal>
+      )}
     </Stack>
   );
 }
@@ -958,7 +1018,7 @@ function CardsPanel({ onLock }) {
   }
 
   return (
-    <Stack gap={5} style={{ paddingTop: "1rem" }}>
+    <Stack gap={5} className="admin-panel admin-panel--cards">
       <h3>Cards ({cards.length})</h3>
       {cards.map((c) => (
         <Tile key={c.card}>
@@ -1061,7 +1121,7 @@ function AuditPanel({ onLock }) {
   }));
 
   return (
-    <Stack gap={5} style={{ paddingTop: "1rem" }}>
+    <Stack gap={5} className="admin-panel admin-panel--audit">
       <h3>Audit trail</h3>
       <p style={{ color: "var(--cds-text-secondary)", fontSize: "0.875rem" }}>
         Administrative mutations, newest first.

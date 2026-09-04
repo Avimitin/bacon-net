@@ -1,163 +1,392 @@
 import { useEffect, useState } from "react";
 import { Link } from "react-router";
 import {
-  ClickableTile,
-  Tag,
-  Tile,
-  Grid,
-  Column,
-  Stack,
-  SkeletonText,
-  SkeletonPlaceholder,
-  InlineNotification,
-  NotificationActionButton,
   Button,
+  ClickableTile,
+  Column,
+  Grid,
+  SkeletonPlaceholder,
+  SkeletonText,
 } from "@carbon/react";
-import { ArrowRight } from "@carbon/icons-react";
+import {
+  Add,
+  ArrowRight,
+  ChartLine,
+  GameConsole,
+  Renew,
+  UserAvatar,
+  Wallet,
+} from "@carbon/icons-react";
 import { api, getGames, konamiCache } from "../api.js";
 import { useAuthFailure } from "../session.jsx";
 import { gameIcon } from "../gameIcons.js";
 import { fmtDate, humanError } from "../util.js";
 
+const profileTones = ["blue", "purple", "teal", "red"];
+
+function SectionLabel({ index, children }) {
+  return (
+    <p className="section-label">
+      <span aria-hidden="true">{index}</span>
+      {children}
+    </p>
+  );
+}
+
+function AccountTopology({ username, cards, profiles, games }) {
+  const profileGames = [...new Set(profiles.map((profile) => profile.game))];
+  const visibleGames = profileGames.slice(0, 4);
+
+  return (
+    <section className="account-map" aria-labelledby="account-map-title">
+      <div className="account-map__heading">
+        <div>
+          <p className="account-map__overline">Live account model</p>
+          <h2 id="account-map-title">Your network</h2>
+        </div>
+        <span className="account-map__state">
+          <span aria-hidden="true" /> Connected
+        </span>
+      </div>
+
+      <div className="account-map__canvas" aria-hidden="true">
+        <svg viewBox="0 0 560 328" preserveAspectRatio="none" focusable="false">
+          <path d="M112 64H224V160H304" />
+          <path d="M272 160H352V240H432" />
+          <circle cx="224" cy="160" r="4" />
+          <circle cx="352" cy="240" r="4" />
+        </svg>
+
+        <div className="account-map__node account-map__node--user">
+          <UserAvatar size={20} />
+          <span>
+            <small>Account</small>
+            <strong>{username}</strong>
+          </span>
+        </div>
+
+        <div className="account-map__node account-map__node--cards">
+          <Wallet size={24} />
+          <span>
+            <strong>{String(cards.length).padStart(2, "0")}</strong>
+            <small>bound cards</small>
+          </span>
+        </div>
+
+        <div className="account-map__node account-map__node--profiles">
+          <span className="account-map__profile-count">
+            <GameConsole size={24} />
+            <strong>{String(profiles.length).padStart(2, "0")}</strong>
+          </span>
+          <small>game profiles</small>
+          {visibleGames.length > 0 && (
+            <span className="account-map__games">
+              {visibleGames.map((key) => {
+                const icon = gameIcon(key);
+                const game = games.find((candidate) => candidate.key === key);
+                return icon ? (
+                  <img key={key} src={icon} alt="" title={game?.name ?? key} />
+                ) : (
+                  <span key={key}>{key.slice(0, 2).toUpperCase()}</span>
+                );
+              })}
+              {profileGames.length > visibleGames.length && (
+                <span>+{profileGames.length - visibleGames.length}</span>
+              )}
+            </span>
+          )}
+        </div>
+
+        <span className="account-map__coordinate account-map__coordinate--top">X / 08</span>
+        <span className="account-map__coordinate account-map__coordinate--bottom">Y / 16</span>
+      </div>
+
+      <p className="sr-only">
+        Account {username} connects {cards.length} bound cards to {profiles.length} game
+        profiles.
+      </p>
+    </section>
+  );
+}
+
+function ProfileCard({ profile, game, index }) {
+  const icon = gameIcon(profile.game);
+  const versions = profile.versions || [];
+  const to = `/settings/${encodeURIComponent(profile.table)}/${encodeURIComponent(profile.doc_id)}`;
+  const name = profile.name || "Player name not set";
+
+  return (
+    <li className="profile-grid__item">
+      <ClickableTile
+        as={Link}
+        to={to}
+        className="profile-card"
+        data-tone={profileTones[index % profileTones.length]}
+        aria-label={`Open settings for ${game?.name ?? profile.game}, player ${name}`}
+      >
+        <span className="profile-card__signal" aria-hidden="true" />
+        <div className="profile-card__header">
+          <span className="profile-card__index" aria-hidden="true">
+            {String(index + 1).padStart(2, "0")}
+          </span>
+          <span className="profile-card__icon">
+            {icon ? <img src={icon} alt="" /> : <GameConsole size={32} />}
+          </span>
+          <span className="profile-card__key">{profile.game}</span>
+        </div>
+
+        <div className="profile-card__body">
+          <p className="profile-card__name">{name}</p>
+          <h3>{game?.name ?? profile.game}</h3>
+        </div>
+
+        <dl className="profile-card__facts">
+          <div>
+            <dt>Player ID</dt>
+            <dd>{profile.game_id == null ? "Not assigned" : String(profile.game_id)}</dd>
+          </div>
+          <div>
+            <dt>Versions</dt>
+            <dd>{versions.length ? versions.join(" / ") : "None detected"}</dd>
+          </div>
+        </dl>
+
+        <span className="profile-card__action">
+          Open settings <ArrowRight size={20} />
+        </span>
+      </ClickableTile>
+    </li>
+  );
+}
+
+function DashboardSkeleton() {
+  return (
+    <div className="dashboard dashboard--loading" aria-busy="true">
+      <h1 className="sr-only">Loading dashboard</h1>
+      <div className="dashboard-hero dashboard-hero--loading">
+        <div className="dashboard-hero__copy">
+          <SkeletonText width="20%" />
+          <SkeletonText heading width="72%" />
+          <SkeletonText paragraph lineCount={2} width="58%" />
+        </div>
+        <SkeletonPlaceholder className="dashboard-hero__skeleton-map" />
+      </div>
+      <div className="dashboard-summary">
+        {[0, 1, 2].map((item) => (
+          <SkeletonPlaceholder key={item} className="dashboard-summary__skeleton" />
+        ))}
+      </div>
+      <Grid fullWidth className="dashboard-body">
+        <Column sm={4} md={8} lg={12}>
+          <SkeletonText heading width="32%" />
+          <div className="profile-grid profile-grid--loading">
+            {[0, 1, 2, 3].map((item) => (
+              <SkeletonPlaceholder key={item} className="profile-grid__skeleton" />
+            ))}
+          </div>
+        </Column>
+        <Column sm={4} md={8} lg={4}>
+          <SkeletonPlaceholder className="access-panel__skeleton" />
+        </Column>
+      </Grid>
+    </div>
+  );
+}
+
 export default function Dashboard() {
   const authFailure = useAuthFailure();
   const [data, setData] = useState(null);
   const [error, setError] = useState(null);
+  const [loadAttempt, setLoadAttempt] = useState(0);
 
   useEffect(() => {
+    let active = true;
+    setError(null);
+
     Promise.all([api.me(), api.profiles(), getGames()])
-      .then(([me, { profiles }, games]) => setData({ me, profiles, games }))
+      .then(([me, { profiles }, games]) => {
+        if (active) setData({ me, profiles, games });
+      })
       .catch((err) => {
-        if (!authFailure(err)) setError(humanError(err));
+        if (active && !authFailure(err)) setError(humanError(err));
       });
-  }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+    return () => {
+      active = false;
+    };
+  }, [loadAttempt]); // eslint-disable-line react-hooks/exhaustive-deps
 
   if (error) {
     return (
-      <InlineNotification
-        kind="error"
-        title="Could not load dashboard"
-        subtitle={error}
-        hideCloseButton
-        lowContrast
-      />
+      <section className="dashboard-state" role="alert">
+        <SectionLabel index="00">Signal interrupted</SectionLabel>
+        <h1>Dashboard unavailable</h1>
+        <p>{error}</p>
+        <Button renderIcon={Renew} onClick={() => setLoadAttempt((attempt) => attempt + 1)}>
+          Try again
+        </Button>
+      </section>
     );
   }
 
-  if (!data) {
-    return (
-      <Stack gap={6} style={{ marginTop: "1rem" }}>
-        <SkeletonText heading width="40%" />
-        <SkeletonPlaceholder style={{ width: "100%", height: "6rem" }} />
-        <Grid narrow>
-          {[0, 1, 2].map((i) => (
-            <Column key={i} sm={4} md={4} lg={5}>
-              <SkeletonPlaceholder style={{ width: "100%", height: "12rem" }} />
-            </Column>
-          ))}
-        </Grid>
-      </Stack>
-    );
-  }
+  if (!data) return <DashboardSkeleton />;
 
   const { me, profiles, games } = data;
+  const connectedGames = new Set(profiles.map((profile) => profile.game)).size;
+  const profilesByCard = new Map();
+
+  for (const profile of profiles) {
+    profilesByCard.set(profile.card, (profilesByCard.get(profile.card) || 0) + 1);
+  }
 
   return (
-    <Stack gap={7} style={{ marginTop: "1rem" }}>
-      <div>
-        <h1>Welcome back, {me.username}</h1>
-        <p style={{ color: "var(--cds-text-secondary)" }}>
-          on the network since {fmtDate(me.created_at)}
-        </p>
-      </div>
-
-      <Tile>
-        <Stack gap={4}>
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-            <h3>Your cards</h3>
-            <Button as={Link} to="/cards" kind="ghost" size="sm">
-              Manage
+    <div className="dashboard">
+      <section className="dashboard-hero" aria-labelledby="dashboard-title">
+        <div className="dashboard-hero__copy">
+          <SectionLabel index="00">Player network</SectionLabel>
+          <h1 id="dashboard-title">
+            Your play,
+            <span>wired together.</span>
+          </h1>
+          <p className="dashboard-hero__intro">
+            Welcome back, <strong>{me.username}</strong>. Every card, profile, and score in
+            one focused signal.
+          </p>
+          <div className="dashboard-hero__actions">
+            <Button as={Link} to="/scores" renderIcon={ChartLine}>
+              Explore scores
+            </Button>
+            <Button as={Link} to="/cards" kind="tertiary" renderIcon={ArrowRight}>
+              Manage cards
             </Button>
           </div>
-          {me.cards.length ? (
-            <div style={{ display: "flex", flexWrap: "wrap", gap: "0.5rem" }}>
-              {me.cards.map((uid) => (
-                <Tag key={uid} type="cool-gray" size="md" title={konamiCache.get(uid) ?? "konami id unknown"}>
-                  {uid}
-                  {konamiCache.get(uid) ? ` · ${konamiCache.get(uid)}` : ""}
-                </Tag>
-              ))}
-            </div>
-          ) : (
-            <p style={{ color: "var(--cds-text-secondary)" }}>No cards bound yet.</p>
-          )}
-        </Stack>
-      </Tile>
+        </div>
 
-      <div>
-        <h3 style={{ marginBottom: "1rem" }}>Game profiles</h3>
-        {profiles.length ? (
-          <Grid narrow>
-            {profiles.map((p) => {
-              const game = games.find((g) => g.key === p.game);
-              const icon = gameIcon(p.game);
-              const to = `/settings/${encodeURIComponent(p.table)}/${encodeURIComponent(p.doc_id)}`;
-              return (
-                <Column key={`${p.table}:${p.doc_id}`} sm={4} md={4} lg={5} style={{ marginBottom: "1rem" }}>
-                  <ClickableTile as={Link} to={to}>
-                    <Stack gap={3}>
-                      <div style={{ display: "flex", alignItems: "center", gap: "0.75rem" }}>
-                        {icon && <img src={icon} alt="" width={40} height={40} />}
-                        <h4>{game?.name ?? p.game}</h4>
-                        <Tag type="magenta" size="sm">
-                          {p.game}
-                        </Tag>
-                      </div>
-                      <dl style={{ display: "grid", gridTemplateColumns: "auto 1fr", gap: "0.25rem 1rem" }}>
-                        <dt style={{ color: "var(--cds-text-secondary)" }}>player</dt>
-                        <dd>{p.name ?? "—"}</dd>
-                        <dt style={{ color: "var(--cds-text-secondary)" }}>game id</dt>
-                        <dd style={{ fontFamily: "monospace" }}>{String(p.game_id)}</dd>
-                        <dt style={{ color: "var(--cds-text-secondary)" }}>card</dt>
-                        <dd style={{ fontFamily: "monospace", fontSize: "0.875rem" }}>{p.card}</dd>
-                        <dt style={{ color: "var(--cds-text-secondary)" }}>pin</dt>
-                        <dd>••••</dd>
-                      </dl>
-                      <div style={{ display: "flex", flexWrap: "wrap", gap: "0.25rem" }}>
-                        {(p.versions || []).length ? (
-                          p.versions.map((v) => (
-                            <Tag key={v} type="cool-gray" size="sm">
-                              ver {v}
-                            </Tag>
-                          ))
-                        ) : (
-                          <span style={{ color: "var(--cds-text-secondary)" }}>no versions</span>
-                        )}
-                      </div>
-                      <span style={{ display: "inline-flex", alignItems: "center", gap: "0.25rem", color: "var(--cds-link-primary)" }}>
-                        Open settings <ArrowRight size={16} />
-                      </span>
-                    </Stack>
-                  </ClickableTile>
-                </Column>
-              );
-            })}
-          </Grid>
-        ) : (
-          <InlineNotification
-            kind="info"
-            title="No game profiles on your cards yet"
-            subtitle="Play a game with one of your bound cards, or bind a card you've already used."
-            hideCloseButton
-            lowContrast
-            actions={
-              <NotificationActionButton as={Link} to="/cards">
+        <AccountTopology
+          username={me.username}
+          cards={me.cards}
+          profiles={profiles}
+          games={games}
+        />
+      </section>
+
+      <dl className="dashboard-summary" aria-label="Account summary">
+        <div>
+          <dt>Game profiles</dt>
+          <dd className="dashboard-summary__value">
+            {String(profiles.length).padStart(2, "0")}
+          </dd>
+          <dd className="dashboard-summary__detail">Ready to configure</dd>
+        </div>
+        <div>
+          <dt>Bound cards</dt>
+          <dd className="dashboard-summary__value">
+            {String(me.cards.length).padStart(2, "0")}
+          </dd>
+          <dd className="dashboard-summary__detail">Your access points</dd>
+        </div>
+        <div>
+          <dt>Connected games</dt>
+          <dd className="dashboard-summary__value">
+            {String(connectedGames).padStart(2, "0")}
+          </dd>
+          <dd className="dashboard-summary__detail">
+            On the network since {fmtDate(me.created_at)}
+          </dd>
+        </div>
+      </dl>
+
+      <Grid fullWidth className="dashboard-body">
+        <Column sm={4} md={8} lg={12} className="dashboard-profiles">
+          <div className="dashboard-section__heading">
+            <div>
+              <SectionLabel index="01">Identity layer</SectionLabel>
+              <h2>Game profiles</h2>
+            </div>
+            {profiles.length > 0 && (
+              <Link className="dashboard-section__link" to="/scores">
+                View all scores <ArrowRight size={16} />
+              </Link>
+            )}
+          </div>
+
+          {profiles.length > 0 ? (
+            <ol className="profile-grid">
+              {profiles.map((profile, index) => (
+                <ProfileCard
+                  key={`${profile.table}:${profile.doc_id}`}
+                  profile={profile}
+                  game={games.find((candidate) => candidate.key === profile.game)}
+                  index={index}
+                />
+              ))}
+            </ol>
+          ) : (
+            <div className="dashboard-empty">
+              <GameConsole size={48} aria-hidden="true" />
+              <h3>No game profiles yet</h3>
+              <p>
+                Play once with a bound card, or bind a card you have already used. Your
+                profiles will appear here automatically.
+              </p>
+              <Button as={Link} to="/cards" renderIcon={Add}>
                 Bind a card
-              </NotificationActionButton>
-            }
-          />
-        )}
-      </div>
-    </Stack>
+              </Button>
+            </div>
+          )}
+        </Column>
+
+        <Column sm={4} md={8} lg={4}>
+          <aside className="access-panel" aria-labelledby="access-panel-title">
+            <div className="access-panel__heading">
+              <SectionLabel index="02">Access layer</SectionLabel>
+              <Wallet size={32} aria-hidden="true" />
+              <h2 id="access-panel-title">Your cards</h2>
+              <p>Physical access points linked to this account.</p>
+            </div>
+
+            {me.cards.length > 0 ? (
+              <ol className="access-list">
+                {me.cards.map((uid, index) => {
+                  const konamiId = konamiCache.get(uid);
+                  const profileCount = profilesByCard.get(uid) || 0;
+                  return (
+                    <li key={uid}>
+                      <span className="access-list__index" aria-hidden="true">
+                        {String(index + 1).padStart(2, "0")}
+                      </span>
+                      <div>
+                        <p className="access-list__uid">{uid}</p>
+                        <p className="access-list__meta">
+                          {konamiId ? `Konami ID ${konamiId}` : "Konami ID unavailable"}
+                        </p>
+                        <p className="access-list__profiles">
+                          <span aria-hidden="true" />
+                          {profileCount} {profileCount === 1 ? "profile" : "profiles"}
+                        </p>
+                      </div>
+                    </li>
+                  );
+                })}
+              </ol>
+            ) : (
+              <div className="access-panel__empty">
+                <p>No cards are bound to this account yet.</p>
+              </div>
+            )}
+
+            <Button
+              as={Link}
+              to="/cards"
+              kind="secondary"
+              renderIcon={ArrowRight}
+              className="access-panel__action"
+            >
+              {me.cards.length ? "Manage cards" : "Bind your first card"}
+            </Button>
+          </aside>
+        </Column>
+      </Grid>
+    </div>
   );
 }
